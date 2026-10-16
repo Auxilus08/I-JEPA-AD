@@ -13,6 +13,7 @@ choice can leak a ground-truth target latent into the context.
 
 from __future__ import annotations
 
+import hashlib
 import math
 
 import torch
@@ -21,6 +22,23 @@ from torch import Tensor
 from ijepa_ad.masking import CoarseMasker, PatchGrid
 
 _PATCH_SIZE = 16  # only used to build a PatchGrid of the right token-grid size
+_SAMPLE_SEED_DOMAIN = "ijepa-ad/validation-mask/v1"
+
+
+def sample_mask_seed(base_seed: int, sample_id: str, epoch: int | None = None) -> int:
+    """Derive a stable 63-bit generator seed for one sample's validation mask.
+
+    The seed is the first 8 bytes (big-endian, top bit cleared) of
+    ``SHA-256("<domain>|<base_seed>|<epoch or ->|<sample_id>")``. SHA-256 is
+    process- and platform-independent, unlike Python's salted ``hash()``. The seed
+    depends only on ``base_seed``, the sample id and, if given, the epoch, so a
+    sample's mask does not depend on batch size, batch order or batch neighbours.
+    ``epoch=None`` yields one fixed mask per sample for every epoch.
+    """
+    epoch_part = "-" if epoch is None else str(epoch)
+    text = f"{_SAMPLE_SEED_DOMAIN}|{base_seed}|{epoch_part}|{sample_id}"
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
 
 
 def build_inference_aligned_target_mask(

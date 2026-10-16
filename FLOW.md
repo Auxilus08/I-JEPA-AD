@@ -213,6 +213,11 @@ Predictor interfaces (`src/ijepa_ad/predictor/`):
   stopping, and checkpoint saving. The CLI seeds before predictor initialization;
   training requires distinct train/val cache splits, batches lazily, casts cached
   latents to the model dtype, and keeps validation masks fixed across epochs.
+  Validation masks are per sample (`build_validation_target_mask`): each sample's
+  generator is seeded by `sample_mask_seed(seed + 10000, image_id)` (SHA-256, so
+  independent of batch size, order and `PYTHONHASHSEED`); training masks still use
+  one shared generator. Validation losses from different mask strategies are not
+  directly comparable.
   Checkpoints include cache provenance (encoder/checkpoint/preprocessing, latent
   dtype, and train/val sample IDs) and a `reproducibility` block (seeds, mask
   strategy, torch/python versions, git commit/dirty flag). A non-finite loss raises.
@@ -223,6 +228,19 @@ Predictor interfaces (`src/ijepa_ad/predictor/`):
   `CoarseMasker` windows (exactly the coarse inference masks) or isolated
   non-adjacent single tokens (stand-ins for 1x1 fine masks). Selection only; the
   predictor overwrites target latents with its mask token, so no target leaks.
+  `sample_mask_seed(base_seed, sample_id, epoch=None)` derives the per-sample
+  validation seed: first 8 bytes of `SHA-256("ijepa-ad/validation-mask/v1|base_seed|
+  epoch-or-'-'|sample_id")`, top bit cleared.
+- [`inference.py`](src/ijepa_ad/inference.py):
+  `load_predictor_checkpoint` (predictor only) wraps
+  `load_predictor_checkpoint_with_provenance` -> `(predictor, {status, mask_strategy,
+  training_config, reproducibility})`; fields a checkpoint lacks stay `None`
+  (`status` = `complete` / `partial` / `legacy`). `image_score_upper_bound(mode, lam)`
+  gives the maximum fused patch score (fixed `2`, dense `2*lam`, adaptive
+  `2*(1+lam)`); `InferenceResult.image_score = raw_image_score / score_upper_bound`
+  in [0, 1] (comparable only within one mode and lambda), where `raw_image_score` is
+  `max(patch_scores)`. `evaluation/runner.py` writes `predictor_provenance`,
+  `predictor_checkpoint` and `image_score_definition` into each category result.
 - [`data/augmentation.py`](src/ijepa_ad/data/augmentation.py):
   `AugmentationConfig` (+ `fingerprint()`), `load_augmentation_config(path, category)`
   (defaults + `category_overrides`), `augment_image`, `materialize_augmented_records`
@@ -321,7 +339,7 @@ batch.latents          # Tensor[2, 196, 1408], in requested order
 1. `notebooks/01_train_predictor.ipynb` loads predictor settings, validates each MVTec category, and reuses or builds nominal `train`/`val` latent caches through `run_cache_generation`.
 2. It constructs `LatentTransformerPredictor` from cache dimensions and config architecture fields, then calls `train_predictor` with early stopping and writes the best model to `checkpoints/predictors/<category>_<loss>.pt`.
 3. `notebooks/02_augment_and_train_predictor.ipynb` splits original nominal training images first (using `nominal_split` from `configs/data/mvtec.yaml`, independent of the augmentation seed), augments only the training side in image space via `materialize_augmented_records` (fingerprinted directory, content-hash ids, capsule never mirrored), encodes the resulting records into `data/cache/latents_augmented`, and writes augmented-run checkpoints under `checkpoints/predictors_augmented`.
-4. Both checkpoint payloads retain model configuration, training configuration, loss history, selected epoch, and train/validation cache provenance. The official test split is evaluation-only.
+4. Both checkpoint payloads retain model configuration, training configuration, a `reproducibility` block, loss history, selected epoch, and train/validation cache provenance; evaluation copies the training and reproducibility metadata into its result JSON. The official test split is evaluation-only.
 Before training or inference, an entrypoint calls `set_seed(seed)` once. Runtime
 blocks can be wrapped as `with profile_peak_vram("stage"):` and all run output is
 sent through the logger returned by `setup_logging()`.
@@ -429,7 +447,7 @@ frontend.services.backend_interface.run_inference(...)
         ▼
 Returns Result Schema:
 {
-    "image_score": float,
+    "image_score": float,   # in [0, 1]; max patch score / mode-and-lambda maximum
     "pixel_heatmap": ndarray [H, W],
     "overlay": PIL.Image | ndarray,
     "detected_regions": list[dict],

@@ -123,9 +123,13 @@ def test_training_and_validation_use_aligned_masks_and_validation_repeats(
 
     train_predictor(_model(), train, val, _config())
 
-    assert len(seen) == 4  # (train, val) x 2 epochs
-    assert torch.equal(seen[1], seen[3])  # validation masks fixed across epochs
-    assert not torch.equal(seen[0], seen[2])  # training masks keep varying
+    # Per epoch: one training-batch call, then one call per validation sample.
+    assert len(seen) == 2 * (1 + len(val))
+    assert [m.shape[0] for m in seen[: 1 + len(val)]] == [4] + [1] * len(val)
+    epoch_two = seen[1 + len(val) :]
+    for before, after in zip(seen[1 : 1 + len(val)], epoch_two[1:], strict=True):
+        assert torch.equal(before, after)  # validation masks fixed across epochs
+    assert not torch.equal(seen[0], epoch_two[0])  # training masks keep varying
     for mask in seen:
         assert (mask.sum(dim=1) >= 1).all() and (mask.sum(dim=1) < GRID * GRID).all()
 

@@ -24,7 +24,10 @@ from ijepa_ad.predictor.cache_dataset import (
     load_cached_latent_dataset,
 )
 from ijepa_ad.predictor.losses import prediction_loss
-from ijepa_ad.predictor.target_masks import build_inference_aligned_target_mask
+from ijepa_ad.predictor.target_masks import (
+    build_inference_aligned_target_mask,
+    sample_mask_seed,
+)
 from ijepa_ad.predictor.transformer_predictor import (
     LatentTransformerPredictor,
     PredictorConfig,
@@ -32,6 +35,10 @@ from ijepa_ad.predictor.transformer_predictor import (
 from ijepa_ad.utils.seeding import set_seed
 
 MASK_STRATEGIES = ("random", "inference_aligned")
+# Validation masks are drawn per sample from ``sample_mask_seed(seed + OFFSET,
+# image_id)``: fixed across epochs (so early stopping compares like with like) and
+# independent of batch size and order. Validation losses are only comparable
+# between runs that use the same mask strategy and mask parameters.
 VALIDATION_MASK_SEED_OFFSET = 10_000
 
 
@@ -164,9 +171,8 @@ def train_predictor(
             ),
             config,
             device,
-            torch.Generator(device="cpu").manual_seed(
-                config.seed + VALIDATION_MASK_SEED_OFFSET
-            ),
+            None,
+            validation_mask_seed=config.seed + VALIDATION_MASK_SEED_OFFSET,
         )
         history.append(EpochMetrics(epoch, train_loss, val_loss))
         if val_loss < best_val - config.min_delta:
@@ -239,6 +245,28 @@ def build_target_mask(
     )
 
 
+def build_validation_target_mask(
+    config: TrainingConfig,
+    image_ids: Sequence[str],
+    num_tokens: int,
+    *,
+    base_seed: int,
+    epoch: int | None = None,
+) -> Tensor:
+    """Sample one validation mask per sample, each from its own generator.
+
+    Row ``i`` depends only on ``(config, base_seed, image_ids[i], epoch)``, never on
+    the batch size, the other samples or their order, and no global RNG is used.
+    """
+    rows = []
+    for image_id in image_ids:
+        generator = torch.Generator(device="cpu").manual_seed(
+            sample_mask_seed(base_seed, image_id, epoch)
+        )
+        rows.append(build_target_mask(config, 1, num_tokens, generator))
+    return torch.cat(rows)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI for later GPU training once real latent caches exist."""
     parser = _parser()
@@ -292,9 +320,10 @@ def _run_epoch(
     batches: Iterator[CachedLatentBatch],
     config: TrainingConfig,
     device: torch.device,
-    mask_generator: torch.Generator,
+    mask_generator: torch.Generator | None,
     *,
     optimizer: torch.optim.Optimizer | None = None,
+    validation_mask_seed: int | None = None,
 ) -> float:
     training = optimizer is not None
     model.train(training)
@@ -303,9 +332,19 @@ def _run_epoch(
     dtype = next(model.parameters()).dtype
     for batch in batches:
         latents = batch.latents.to(device=device, dtype=dtype)
-        mask = build_target_mask(
-            config, latents.shape[0], latents.shape[1], mask_generator
-        ).to(device)
+        if validation_mask_seed is not None:
+            mask = build_validation_target_mask(
+                config,
+                batch.image_ids,
+                latents.shape[1],
+                base_seed=validation_mask_seed,
+            )
+        else:
+            assert mask_generator is not None
+            mask = build_target_mask(
+                config, latents.shape[0], latents.shape[1], mask_generator
+            )
+        mask = mask.to(device)
         if training:
             assert optimizer is not None
             optimizer.zero_grad(set_to_none=True)
@@ -403,6 +442,10 @@ def _reproducibility_info(config: TrainingConfig) -> dict[str, Any]:
         "train_mask_seed": config.seed,
         "shuffle_seed": "seed + epoch",
         "validation_mask_seed": config.seed + VALIDATION_MASK_SEED_OFFSET,
+        "validation_mask_protocol": (
+            "per-sample SHA-256(base_seed, image_id); fixed across epochs; "
+            "independent of batch size/order"
+        ),
         "mask_strategy": config.mask_strategy,
         "torch_version": str(torch.__version__),
         "python_version": platform.python_version(),

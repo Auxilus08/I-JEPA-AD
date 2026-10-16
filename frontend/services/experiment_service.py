@@ -54,6 +54,10 @@ def load_category_threshold(
             threshold = row.get("decision_threshold")
             if threshold is None:
                 return default, False
+            if "image_score_definition" not in row:
+                # Calibrated under the pre-normalization score (max / 2, clamped);
+                # not on the scale the live scorer reports now.
+                return default, False
             if (
                 isinstance(threshold, bool)
                 or not isinstance(threshold, int | float)

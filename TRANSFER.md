@@ -1,9 +1,9 @@
 # TRANSFER.md
-_Last updated: 2026-10-17, by Claude Code, at commit a64a2a0 (HEAD) plus **uncommitted** working-tree changes_
+_Last updated: 2026-10-17, by Claude Code, at commit 512aa19 (HEAD, branch `mask-align`) plus **uncommitted** working-tree changes (see §1)_
 
 ## 1. One-paragraph project state
 
-The pipeline code is complete for the three-category pilot (bottle, capsule, hazelnut): frozen I-JEPA wrapper, latent caches, Transformer predictor, coarse-to-fine inference, fusion, metrics and a Streamlit UI. An earlier session (RTX 4090 machine) recorded real-model pilot results (see §3), but **none of those artifacts exist in this checkout** (no `checkpoints/`, `external/ijepa`, `data/cache/`, or `results/*`), so they cannot be re-verified here. On 2026-10-17 an audit led to code changes (uncommitted): predictor training masks now match the inference masks, the UI heatmap is bilinear, augmentation outputs and caches can no longer go stale, the encoder wrapper cannot be unfrozen, and checkpoints record seeds and code provenance. **Because training masks changed, all previously trained predictors must be retrained and the pilot numbers in §3 are not comparable with future runs.** No real-model inference or GPU run was performed in the 2026-10-17 session.
+The pipeline code is complete for the three-category pilot (bottle, capsule, hazelnut): frozen I-JEPA wrapper, latent caches, Transformer predictor, coarse-to-fine inference, fusion, metrics and a Streamlit UI. An earlier session (RTX 4090 machine) recorded real-model pilot results (see §3), but **none of those artifacts exist in this checkout** (no `checkpoints/`, `external/ijepa`, `data/cache/`, or `results/*`), so they cannot be re-verified here. On 2026-10-17 an audit led to code changes (uncommitted): predictor training masks now match the inference masks, the UI heatmap is bilinear, augmentation outputs and caches can no longer go stale, the encoder wrapper cannot be unfrozen, and checkpoints record seeds and code provenance. **Because training masks changed, all previously trained predictors must be retrained and the pilot numbers in §3 are not comparable with future runs.** Those changes are committed in 512aa19. A later, still **uncommitted** session added three pre-experiment fixes: evaluation JSON now records predictor `training_config`/`reproducibility`/`mask_strategy` (legacy checkpoints report `null`/`legacy`, nothing inferred); validation masks are per sample (SHA-256 of seed and image id) and independent of batch size; `image_score` is now `max(patch_scores) / upper_bound(mode, lambda)` so adaptive scores above 2 no longer saturate (details in DECISIONS.md, 2026-10-17 entries). Because of the last two, **validation losses and adaptive/dense image scores and thresholds are not comparable with anything produced before**. No real-model inference or GPU run was performed.
 
 ## 2. Phase checklist
 
@@ -18,7 +18,10 @@ The pipeline code is complete for the three-category pilot (bottle, capsule, haz
 
 ## 3. What is verified working right now
 
-Backed by tests run on 2026-10-17 (`pytest -p no:cacheprovider -q tests`: **283 passed**, 3 consecutive runs; `ruff check` and `black --check` clean):
+Backed by tests run on 2026-10-17 (`pytest -p no:cacheprovider -q tests`: **325 passed** after the three pre-experiment fixes, 283 at 512aa19; `ruff check` and `black --check` clean; mypy has 3 pre-existing errors, none in changed code):
+- Predictor provenance in evaluation: current, partial and legacy checkpoints, integrity checks kept, result JSON-serializable (`tests/unit/test_inference.py`, `tests/unit/test_evaluation_provenance.py`; the latter stubs datasets and uses a tiny real checkpoint file).
+- Validation masks identical for batch sizes 1/4/16, reordered samples, partial batches, across `PYTHONHASHSEED` values, no global RNG use (`tests/unit/test_validation_masks.py`).
+- Image-score bounds per mode/lambda, extremes map to 0 and 1, raw 2 vs 3 no longer tie, ranking preserved (`tests/unit/test_inference.py`); frontend ignores calibrated thresholds lacking `image_score_definition` (`tests/unit/test_frontend.py`).
 - Inference-aligned mask sampler: block rows equal the 16 coarse inference windows, single rows are isolated tokens, determinism, context always remains (`tests/unit/test_target_masks.py`).
 - No target leakage: rewriting target latents leaves predictor output unchanged; loss equals mean `1 - cos` over target tokens only.
 - Bilinear upsampling shared by evaluation and UI; normalisation is display-only (`tests/unit/test_score_maps.py`).
@@ -42,7 +45,8 @@ Adaptive averaged 16.39 / 16.00 / 17.60 masks per image (bottle/capsule/hazelnut
 - Real behaviour of the train/inference mask alignment on real latents (effect size unknown); the synthetic experiment only showed a gap exists in principle.
 - Possible context leakage via full-image encoding (context tokens are computed with attention over the masked region too); not measured.
 - τ and λ selection on nominal validation data only; τ=0.5 is uncalibrated.
-- `image_score` divides by 2 and clamps, but adaptive scores can reach 2(1+λ); not changed.
+- `image_score` is normalised per (mode, λ): scores are not comparable across modes or λ (use `raw_image_score` / the recorded `image_score_definition`). Fixed-mode bound 2 is unchanged; adaptive/dense differ from earlier reports.
+- Validation losses are comparable only between runs with the same mask strategy and parameters; do not rank `random` vs `inference_aligned` by validation loss.
 - Real baselines (PatchCore, MAE), 12 remaining MVTec categories, ablations, multi-seed statistics, RTX 4060/8 GB validation.
 - No LR scheduler, gradient clipping, AMP or optimizer-state saving (deliberately not added; no evidence they are needed).
 - `python -m ijepa_ad.predictor.training` silently does nothing (no `__main__` guard); use `scripts/train_predictor.py`.
@@ -50,13 +54,15 @@ Adaptive averaged 16.39 / 16.00 / 17.60 masks per image (bottle/capsule/hazelnut
 ## 5. Environment & reproduction
 
 - Windows, Python 3.12, `.venv\Scripts\python.exe`, torch 2.2.2+cpu locally (CUDA not available on this machine). Install: `python -m pip install -e ".[dev,frontend]"`.
-- Verify: `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider -q tests`, `.\.venv\Scripts\ruff.exe check .`, `.\.venv\Scripts\black.exe --check .`, `.\.venv\Scripts\mypy.exe src tests` (one pre-existing error: unused `type: ignore` at `src/ijepa_ad/evaluation/metrics.py:10`).
+- Verify: `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider -q tests`, `.\.venv\Scripts\ruff.exe check .`, `.\.venv\Scripts\black.exe --check .`, `.\.venv\Scripts\mypy.exe src tests` (pre-existing mypy errors: unused `type: ignore` at `src/ijepa_ad/evaluation/metrics.py:10`; `frontend/config.py:50` missing yaml stubs; `frontend/services/backend_interface.py:179` returning Any; the last two appear when `frontend` is included).
 - Local-only state a new environment lacks: Meta checkpoint `checkpoints/IN22K-vit.g.16-600e.pth.tar` (SHA-256 recorded earlier: `a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b`), pinned Meta repo at `external/ijepa` (commit `52c1ae95d05f743e000e8f10a1f3a79b10cff048`), latent caches under `data/cache/`, and predictors under `checkpoints/`. Rebuild caches with `scripts/build_latent_cache.py`; train with `scripts/train_predictor.py` or notebook 01/02.
 - `dataset/` (untracked, not gitignored) duplicates `data/raw/mvtec_ad` (counts match; not hash-compared).
 
 ## 6. Known issues / open threads
 
-- Old predictor checkpoints (scattered masks) still load and score; they are simply not aligned with inference.
+- Old predictor checkpoints (scattered masks) still load and score; they are simply not aligned with inference. Legacy checkpoints have no recorded `mask_strategy`, so evaluation reports it as `null`.
+- Existing `results/benchmarks/pilot_*.json` (none in this checkout) predate `image_score_definition`; the UI will not reuse their calibrated thresholds.
+- The three-fix changes and this TRANSFER.md are uncommitted in the working tree.
 - UI `heatmap` is min-max normalised per image (display only); never feed it to metrics.
 - `baselines/` placeholders must not be reported as PatchCore/MAE results.
 - Evaluation uses the validation set for both early stopping and the 5%-FPR threshold (slightly optimistic).
@@ -64,7 +70,7 @@ Adaptive averaged 16.39 / 16.00 / 17.60 masks per image (bottle/capsule/hazelnut
 
 ## 7. Where to look for more detail
 
-- Rationale: `DECISIONS.md` entries dated 2026-10-17 (masks, upsampling, augmentation, capsule flip, freeze/dtype/provenance).
+- Rationale: `DECISIONS.md` entries dated 2026-10-17 (masks, upsampling, augmentation, capsule flip, freeze/dtype/provenance, predictor provenance in evaluation, per-sample validation masks, image-score normalisation).
 - Architecture and flows: `FLOW.md` §2–§4. Real-model pilot environment: `REPRODUCIBILITY.md`, `docs/GPU_VALIDATION_CHECKLIST.md`.
 
 ## 8. Immediate next step

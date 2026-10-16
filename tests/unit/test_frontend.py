@@ -11,6 +11,7 @@ Verifies:
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import numpy as np
@@ -281,3 +282,30 @@ def test_training_and_benchmark_services() -> None:
     threshold, is_calibrated = load_category_threshold("bottle")
     assert 0.0 <= threshold <= 1.0
     assert isinstance(is_calibrated, bool)
+
+
+def _write_pilot_file(root: Path, **row: object) -> None:
+    path = root / "results" / "benchmarks" / "pilot_adaptive.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"category": "bottle", "mode": "adaptive", **row}
+    path.write_text(json.dumps({"results": [record]}), encoding="utf-8")
+
+
+def test_calibrated_threshold_requires_current_score_definition(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        experiment_service,
+        "__file__",
+        str(tmp_path / "frontend" / "services" / "experiment_service.py"),
+    )
+    # Calibrated on the pre-normalization scale: must not be reused.
+    _write_pilot_file(tmp_path, decision_threshold=0.4)
+    assert load_category_threshold("bottle", default=0.5) == (0.5, False)
+
+    _write_pilot_file(
+        tmp_path,
+        decision_threshold=0.4,
+        image_score_definition={"upper_bound": 4.0},
+    )
+    assert load_category_threshold("bottle", default=0.5) == (0.4, True)

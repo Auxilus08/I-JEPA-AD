@@ -26,8 +26,9 @@ from ijepa_ad.inference import (
     InferenceMode,
     MaskedLatentScorer,
     MaskingSettings,
+    image_score_upper_bound,
     load_masking_settings,
-    load_predictor_checkpoint,
+    load_predictor_checkpoint_with_provenance,
 )
 from ijepa_ad.masking.score_maps import upsample_patch_scores
 from ijepa_ad.predictor.cache_dataset import load_cached_latent_dataset
@@ -93,7 +94,7 @@ def evaluate_category(
     cached_test = load_cached_latent_dataset(
         cache_root, test_expected, samples=test_dataset.samples
     )
-    predictor = load_predictor_checkpoint(
+    predictor, predictor_provenance = load_predictor_checkpoint_with_provenance(
         predictor_path,
         category=category,
         encoder_sha256=encoder_sha256,
@@ -154,6 +155,15 @@ def evaluate_category(
         "category": category,
         "mode": mode,
         "objective": "cosine",
+        "predictor_checkpoint": str(predictor_path),
+        "predictor_provenance": predictor_provenance,
+        "image_score_definition": {
+            "formula": "max(patch_scores) / upper_bound",
+            "upper_bound": image_score_upper_bound(mode, masking_settings["lam"]),
+            "lambda": masking_settings["lam"],
+            "mode": mode,
+            "comparable_across": "runs with identical mode and lambda only",
+        },
         "num_images": len(labels),
         "num_defects": sum(labels),
         "decision_threshold": decision_threshold,

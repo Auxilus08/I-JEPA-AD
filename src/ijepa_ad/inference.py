@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 
 import torch
 import torch.nn.functional as F
@@ -55,6 +55,36 @@ def load_predictor_checkpoint(
     device: str | torch.device,
 ) -> LatentTransformerPredictor:
     """Load a category predictor only when its training provenance matches."""
+    predictor, _ = load_predictor_checkpoint_with_provenance(
+        checkpoint_path,
+        category=category,
+        encoder_sha256=encoder_sha256,
+        device=device,
+    )
+    return predictor
+
+
+def load_predictor_checkpoint_with_provenance(
+    checkpoint_path: str | Path,
+    *,
+    category: str,
+    encoder_sha256: str,
+    device: str | torch.device,
+) -> tuple[LatentTransformerPredictor, dict[str, Any]]:
+    """Load a category predictor plus the training metadata stored with it.
+
+    Validation is identical to ``load_predictor_checkpoint``. The returned
+    metadata is copied verbatim from the checkpoint and is JSON-serializable:
+
+    - ``training_config``: the saved ``TrainingConfig`` mapping.
+    - ``reproducibility``: seeds, library versions and git state, or ``None``.
+    - ``mask_strategy``: ``training_config["mask_strategy"]`` when it was recorded,
+      else ``None``. ``None`` means "not recorded", never "random".
+    - ``status``: ``"complete"`` (``reproducibility`` and ``mask_strategy`` both
+      recorded), ``"legacy"`` (neither recorded) or ``"partial"``.
+
+    Nothing is inferred for fields a checkpoint did not record.
+    """
     path = Path(checkpoint_path)
     payload = torch.load(path, map_location="cpu", weights_only=True)
     if not isinstance(payload, dict):
@@ -71,6 +101,9 @@ def load_predictor_checkpoint(
         or training_config.get("loss_type") != "cosine"
     ):
         raise ValueError("expected a predictor trained with the cosine objective")
+    reproducibility = payload.get("reproducibility")
+    if reproducibility is not None and not isinstance(reproducibility, dict):
+        raise ValueError(f"predictor checkpoint reproducibility is invalid: {path}")
     config_data = payload.get("model_config")
     state_dict = payload.get("model_state_dict")
     if not isinstance(config_data, dict) or not isinstance(state_dict, dict):
@@ -85,7 +118,42 @@ def load_predictor_checkpoint(
     predictor.load_state_dict(state_dict, strict=True)
     predictor.to(device)
     predictor.eval()
-    return predictor
+
+    has_mask_strategy = "mask_strategy" in training_config
+    if reproducibility is not None and has_mask_strategy:
+        status = "complete"
+    elif reproducibility is None and not has_mask_strategy:
+        status = "legacy"
+    else:
+        status = "partial"
+    metadata: dict[str, Any] = {
+        "status": status,
+        "mask_strategy": training_config.get("mask_strategy"),
+        "training_config": dict(training_config),
+        "reproducibility": None if reproducibility is None else dict(reproducibility),
+    }
+    return predictor, metadata
+
+
+def image_score_upper_bound(mode: InferenceMode, lam: float) -> float:
+    """Largest value ``max(patch_scores)`` can take for ``mode`` and ``lam``.
+
+    Token scores are ``1 - cos`` clamped to [0, 2]. Fusion is
+    ``coarse + lam * fine`` (``fuse_scores``), and each mode fills one or both terms:
+
+    - ``fixed``: only coarse scores        -> ``2``
+    - ``dense``: only fine scores          -> ``2 * lam``
+    - ``adaptive``: coarse + refined fine  -> ``2 * (1 + lam)``
+    """
+    if lam < 0:
+        raise ValueError("lam must be non-negative")
+    if mode == "fixed":
+        return 2.0
+    if mode == "dense":
+        return 2.0 * lam
+    if mode == "adaptive":
+        return 2.0 * (1.0 + lam)
+    raise ValueError("mode must be adaptive, dense, or fixed")
 
 
 @dataclass(frozen=True)
@@ -98,11 +166,30 @@ class InferenceResult:
     heatmap: Tensor
     evaluated_regions: int
     total_regions: int
+    # Largest attainable ``max(patch_scores)`` for the producing mode and lambda
+    # (see ``image_score_upper_bound``). The default is the unfused [0, 2] range.
+    score_upper_bound: float = 2.0
+
+    @property
+    def raw_image_score(self) -> float:
+        """Maximum fused patch score, in [0, ``score_upper_bound``]."""
+        return float(self.patch_scores.max().item())
 
     @property
     def image_score(self) -> float:
-        """Maximum cosine discrepancy, scaled to the UI's [0, 1] score range."""
-        return float((self.patch_scores.max() / 2).clamp(0, 1).item())
+        """``raw_image_score / score_upper_bound``, in [0, 1].
+
+        A monotone rescaling of the maximum fused patch score, so image ranking
+        (and AUROC) equals ranking by ``raw_image_score``. It does not saturate
+        early: the bound is the true maximum of the fusion, so only a score at the
+        theoretical maximum maps to 1. The divisor depends on the mode and lambda,
+        so values are comparable only within one (mode, lambda) configuration; use
+        ``raw_image_score`` across configurations.
+        """
+        if self.score_upper_bound <= 0:
+            return 0.0  # e.g. dense mode with lambda == 0 scores nothing
+        scaled = self.raw_image_score / self.score_upper_bound
+        return min(max(scaled, 0.0), 1.0)  # guards float rounding only
 
 
 class MaskedLatentScorer:
@@ -161,6 +248,7 @@ class MaskedLatentScorer:
             return self._result(
                 zero_scores,
                 fine_scores,
+                mode=mode,
                 evaluated=len(selection.windows),
                 total=len(self.fine.candidates()),
             )
@@ -170,6 +258,7 @@ class MaskedLatentScorer:
             return self._result(
                 coarse_scores,
                 zero_scores,
+                mode=mode,
                 evaluated=len(coarse_windows),
                 total=len(coarse_windows),
             )
@@ -186,6 +275,7 @@ class MaskedLatentScorer:
         return self._result(
             coarse_scores,
             fine_scores,
+            mode=mode,
             evaluated=len(coarse_windows) + selection.count,
             total=len(coarse_windows) + len(self.fine.candidates()),
         )
@@ -222,6 +312,7 @@ class MaskedLatentScorer:
         coarse_scores: Tensor,
         fine_scores: Tensor,
         *,
+        mode: InferenceMode,
         evaluated: int,
         total: int,
     ) -> InferenceResult:
@@ -233,4 +324,5 @@ class MaskedLatentScorer:
             heatmap=patch_scores_to_heatmap(patch_scores, self.grid),
             evaluated_regions=evaluated,
             total_regions=total,
+            score_upper_bound=image_score_upper_bound(mode, self.lam),
         )
