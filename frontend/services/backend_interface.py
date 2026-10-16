@@ -147,8 +147,17 @@ def _generate_mock_inference(
     }
 
 
+DEFAULT_PREDICTOR_DIR = "checkpoints/predictors"
+
+
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def resolve_predictor_dir(root: Path, predictor_dir: str | Path | None = None) -> Path:
+    """Directory holding ``<category>_cosine.pt``; relative paths are under ``root``."""
+    path = Path(DEFAULT_PREDICTOR_DIR if predictor_dir is None else predictor_dir)
+    return path if path.is_absolute() else root / path
 
 
 @lru_cache(maxsize=1)
@@ -216,14 +225,16 @@ def _load_encoder(root: str, device_name: str) -> Any:
     )
 
 
-@lru_cache(maxsize=3)
-def _load_predictor(root: str, category: str, device_name: str) -> Any:
+@lru_cache(maxsize=6)
+def _load_predictor(
+    root: str, category: str, device_name: str, predictor_dir: str
+) -> Any:
     from ijepa_ad.caching.cache_schema import is_safe_name
     from ijepa_ad.inference import load_predictor_checkpoint
 
     if not is_safe_name(category):
         raise ValueError(f"invalid MVTec category: {category!r}")
-    path = Path(root) / "checkpoints" / "predictors" / f"{category}_cosine.pt"
+    path = Path(predictor_dir) / f"{category}_cosine.pt"
     if not path.is_file():
         raise FileNotFoundError(f"trained cosine predictor not found: {path}")
     return load_predictor_checkpoint(
@@ -306,6 +317,7 @@ def _run_real_inference(
     method: str,
     category: str | None,
     anomaly_threshold: float,
+    predictor_dir: str | Path | None = None,
 ) -> dict[str, Any]:
     if not PYTORCH_AVAILABLE:
         raise RuntimeError(
@@ -334,7 +346,12 @@ def _run_real_inference(
     root = _project_root()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     encoder = _load_encoder(str(root), str(device))
-    predictor = _load_predictor(str(root), category, str(device))
+    predictor = _load_predictor(
+        str(root),
+        category,
+        str(device),
+        str(resolve_predictor_dir(root, predictor_dir)),
+    )
     image_tensor = preprocess_image(image).unsqueeze(0).to(device)
 
     if device.type == "cuda":
@@ -381,8 +398,14 @@ def run_inference(
     category: str | None = None,
     use_mock: bool = False,
     anomaly_threshold: float = 0.50,
+    predictor_dir: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Run actual inference unless a synthetic response is explicitly requested."""
+    """Run actual inference unless a synthetic response is explicitly requested.
+
+    ``predictor_dir`` selects the checkpoint directory (default
+    ``checkpoints/predictors``; notebook 02 writes
+    ``checkpoints/predictors_augmented``).
+    """
     validated_img = _validate_image_input(image)
     if not 0.0 <= anomaly_threshold <= 1.0:
         raise ValueError("anomaly_threshold must be in [0, 1]")
@@ -393,4 +416,6 @@ def run_inference(
             category=category,
             anomaly_threshold=anomaly_threshold,
         )
-    return _run_real_inference(validated_img, method, category, anomaly_threshold)
+    return _run_real_inference(
+        validated_img, method, category, anomaly_threshold, predictor_dir
+    )

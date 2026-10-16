@@ -32,6 +32,13 @@ DEFAULT_METHODS = {
     "mae_reconstruction": "MAE Reconstruction Baseline",
 }
 
+# Directories written by notebooks/01 (baseline) and notebooks/02 (augmented).
+DEFAULT_PREDICTOR_DIRS = {
+    "baseline": "checkpoints/predictors",
+    "augmented": "checkpoints/predictors_augmented",
+}
+DEFAULT_PREDICTOR_CHECKPOINTS = "baseline"
+
 DEFAULT_ANOMALY_THRESHOLD = 0.50
 DEFAULT_FINE_THRESHOLD = 0.40
 DEFAULT_LAMBDA_FUSION = 1.0
@@ -59,7 +66,9 @@ def load_frontend_config(config_path: Path | None = None) -> dict[str, Any]:
     return {
         "categories": DEFAULT_CATEGORIES,
         "methods": DEFAULT_METHODS,
+        "predictor_checkpoint_dirs": DEFAULT_PREDICTOR_DIRS,
         "defaults": {
+            "predictor_checkpoints": DEFAULT_PREDICTOR_CHECKPOINTS,
             "category": "bottle",
             "method": "adaptive_ijepa",
             "anomaly_threshold": DEFAULT_ANOMALY_THRESHOLD,
