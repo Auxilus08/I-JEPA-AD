@@ -7,6 +7,8 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # type: ignore[attr-defined]
+
 
 def image_auroc(labels: Sequence[int], scores: Sequence[float]) -> float:
     """Compute binary AUROC with average ranks for tied scores."""
@@ -79,24 +81,32 @@ def aupro(
     maximum = max(float(score.max()) for score in score_arrays)
     epsilon = max(float(np.finfo(np.float64).eps), (maximum - minimum) * 1e-9)
     thresholds = np.linspace(maximum + epsilon, minimum - epsilon, num_thresholds)
-    false_positive_rates = np.empty(num_thresholds, dtype=np.float64)
-    region_overlaps = np.empty(num_thresholds, dtype=np.float64)
+    false_positive_rates: NDArray[np.float64] = np.empty(
+        num_thresholds, dtype=np.float64
+    )
+    region_overlaps: NDArray[np.float64] = np.empty(num_thresholds, dtype=np.float64)
 
-    flat_scores = [score.reshape(-1) for score in score_arrays]
-    flat_masks = [mask.reshape(-1) for mask in mask_arrays]
-    for threshold_index, threshold in enumerate(thresholds):
-        predicted = [score >= threshold for score in flat_scores]
-        false_positives = sum(
-            int(np.count_nonzero(prediction & ~mask))
-            for prediction, mask in zip(predicted, flat_masks, strict=True)
+    ascending_thresholds = thresholds[::-1]
+    false_positive_counts: NDArray[np.int64] = np.zeros(num_thresholds, dtype=np.int64)
+    region_overlap_sums: NDArray[np.float64] = np.zeros(
+        num_thresholds, dtype=np.float64
+    )
+    for score, mask in zip(score_arrays, mask_arrays, strict=True):
+        flat_scores = score.reshape(-1)
+        flat_mask = mask.reshape(-1)
+        false_positive_counts += _counts_at_thresholds(
+            flat_scores[~flat_mask], ascending_thresholds
+        )[::-1]
+
+    for image_index, component in components:
+        component_scores = score_arrays[image_index].reshape(-1)[component]
+        region_overlap_sums += (
+            _counts_at_thresholds(component_scores, ascending_thresholds)[::-1]
+            / component.size
         )
-        false_positive_rates[threshold_index] = false_positives / negative_pixels
-        region_overlaps[threshold_index] = np.mean(
-            [
-                np.count_nonzero(predicted[image_index][component]) / component.size
-                for image_index, component in components
-            ]
-        )
+
+    false_positive_rates[:] = false_positive_counts / negative_pixels
+    region_overlaps[:] = region_overlap_sums / len(components)
 
     last_inside = int(np.searchsorted(false_positive_rates, max_fpr, side="right"))
     if last_inside == 0:
@@ -117,13 +127,23 @@ def aupro(
         fpr_curve = np.append(fpr_curve, max_fpr)
         pro_curve = np.append(pro_curve, crossing_pro)
 
-    return float(np.trapz(pro_curve, fpr_curve) / max_fpr)
+    return float(_trapezoid(pro_curve, fpr_curve) / max_fpr)
+
+
+def _counts_at_thresholds(
+    scores: NDArray[np.floating], ascending_thresholds: NDArray[np.float64]
+) -> NDArray[np.int64]:
+    bins = np.searchsorted(ascending_thresholds, scores, side="right")
+    histogram = np.bincount(bins, minlength=ascending_thresholds.size + 1)
+    return np.cumsum(histogram[::-1], dtype=np.int64)[::-1][1:]
 
 
 def binary_auroc(labels: Sequence[int], scores: Sequence[float]) -> float:
     """Compute AUROC using the Mann–Whitney rank-sum identity."""
     label_array = np.asarray(labels)
-    score_array = np.asarray(scores, dtype=np.float64)
+    score_array = np.asarray(scores)
+    if score_array.dtype != np.float32:
+        score_array = score_array.astype(np.float64)
     if label_array.ndim != 1 or score_array.ndim != 1:
         raise ValueError("labels and scores must be one-dimensional")
     if label_array.shape != score_array.shape or not label_array.size:
@@ -142,13 +162,11 @@ def binary_auroc(labels: Sequence[int], scores: Sequence[float]) -> float:
     order = np.argsort(score_array, kind="mergesort")
     sorted_scores = score_array[order]
     ranks = np.empty(score_array.size, dtype=np.float64)
-    start = 0
-    while start < order.size:
-        stop = start + 1
-        while stop < order.size and sorted_scores[stop] == sorted_scores[start]:
-            stop += 1
-        ranks[order[start:stop]] = (start + 1 + stop) / 2
-        start = stop
+    boundaries: NDArray[np.intp] = np.flatnonzero(np.diff(sorted_scores)) + 1
+    starts = np.concatenate(([0], boundaries))
+    stops = np.concatenate((boundaries, [order.size]))
+    average_ranks = (starts + 1 + stops) / 2
+    ranks[order] = np.repeat(average_ranks, stops - starts)
 
     rank_sum = float(ranks[binary_labels].sum())
     return (rank_sum - positives * (positives + 1) / 2) / (positives * negatives)
@@ -157,13 +175,13 @@ def binary_auroc(labels: Sequence[int], scores: Sequence[float]) -> float:
 def _validate_maps(
     score_maps: Sequence[NDArray[np.floating]],
     masks: Sequence[NDArray[np.bool_]],
-) -> tuple[list[NDArray[np.float64]], list[NDArray[np.bool_]]]:
+) -> tuple[list[NDArray[np.float32]], list[NDArray[np.bool_]]]:
     if not score_maps or len(score_maps) != len(masks):
         raise ValueError("score_maps and masks must have equal non-zero lengths")
-    scores_out: list[NDArray[np.float64]] = []
+    scores_out: list[NDArray[np.float32]] = []
     masks_out: list[NDArray[np.bool_]] = []
     for score, mask in zip(score_maps, masks, strict=True):
-        score_array = np.asarray(score, dtype=np.float64)
+        score_array = np.asarray(score, dtype=np.float32)
         mask_array = np.asarray(mask, dtype=bool)
         if score_array.ndim != 2 or score_array.shape != mask_array.shape:
             raise ValueError("each score map and mask must share a 2D shape")

@@ -135,39 +135,50 @@ def load_benchmark_summary() -> tuple[pd.DataFrame, bool]:
     pilot_results = _load_pilot_results(root)
     if pilot_results:
         dense_by_category = {
-            row["category"]: row["mean_masks_per_image"]
+            row["category"]: row.get("mean_masks_per_image")
             for row in pilot_results.get("dense", [])
+            if isinstance(row.get("category"), str)
         }
         records: list[dict[str, Any]] = []
         for mode, rows in pilot_results.items():
-            measured = [row for row in rows if row.get("num_images", 0) > 0]
-            reductions = [
-                100.0
-                * (
-                    1.0
-                    - row["mean_masks_per_image"] / dense_by_category[row["category"]]
-                )
-                for row in measured
-                if row["category"] in dense_by_category
-                and dense_by_category[row["category"]] > 0
+            measured = [
+                row
+                for row in rows
+                if isinstance(row.get("num_images"), int | float)
+                and not isinstance(row.get("num_images"), bool)
+                and row["num_images"] > 0
             ]
+            reductions = [
+                100.0 * (1.0 - float(adaptive_masks) / float(dense_masks))
+                for row in measured
+                if isinstance(row.get("category"), str)
+                and (adaptive_masks := row.get("mean_masks_per_image")) is not None
+                and (dense_masks := dense_by_category.get(row["category"])) is not None
+                and isinstance(adaptive_masks, int | float)
+                and not isinstance(adaptive_masks, bool)
+                and np.isfinite(adaptive_masks)
+                and isinstance(dense_masks, int | float)
+                and not isinstance(dense_masks, bool)
+                and np.isfinite(dense_masks)
+                and dense_masks > 0
+            ]
+
             records.append(
                 {
                     "Method": PILOT_MODE_LABELS[mode],
                     "Image AUROC (%)": 100.0
-                    * float(np.mean([row["image_auroc"] for row in measured])),
+                    * _mean_available_metric(measured, "image_auroc"),
                     "Pixel AUROC (%)": 100.0
-                    * float(np.mean([row["pixel_auroc"] for row in measured])),
-                    "AUPRO (%)": 100.0
-                    * float(np.mean([row["aupro"] for row in measured])),
-                    "Avg Evaluated Masks": float(
-                        np.mean([row["mean_masks_per_image"] for row in measured])
+                    * _mean_available_metric(measured, "pixel_auroc"),
+                    "AUPRO (%)": 100.0 * _mean_available_metric(measured, "aupro"),
+                    "Avg Evaluated Masks": _mean_available_metric(
+                        measured, "mean_masks_per_image"
                     ),
                     "Mask Reduction vs Dense (%)": (
-                        float(np.mean(reductions)) if reductions else 0.0
+                        float(np.mean(reductions)) if reductions else float("nan")
                     ),
-                    "Cached-latent Latency (ms)": float(
-                        np.mean([row["mean_predictor_latency_ms"] for row in measured])
+                    "Cached-latent Latency (ms)": _mean_available_metric(
+                        measured, "mean_predictor_latency_ms"
                     ),
                     "Peak VRAM (MB)": _maximum_available_vram(measured),
                 }
@@ -197,6 +208,18 @@ def load_benchmark_summary() -> tuple[pd.DataFrame, bool]:
     return pd.DataFrame(data), True
 
 
+def _mean_available_metric(rows: list[dict[str, Any]], key: str) -> float:
+    values = [
+        value
+        for row in rows
+        if (value := row.get(key)) is not None
+        and isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and np.isfinite(value)
+    ]
+    return float(np.mean(values)) if values else float("nan")
+
+
 def _maximum_available_vram(rows: list[dict[str, Any]]) -> float | None:
     values = [
         value
@@ -212,41 +235,97 @@ def benchmark_efficiency_highlights(
     bench_df: pd.DataFrame,
 ) -> list[tuple[str, str, str]]:
     """Summarize adaptive-vs-dense efficiency when both measurements are present."""
-    adaptive_rows = bench_df.loc[bench_df["Method"] == "Adaptive I-JEPA"]
-    dense_rows = bench_df.loc[bench_df["Method"] == "Dense-mask I-JEPA"]
-    if adaptive_rows.empty or dense_rows.empty:
-        row = bench_df.iloc[0] if not bench_df.empty else None
-        image_auroc = "—" if row is None else f"{row['Image AUROC (%)']:.1f} %"
-        image_method = "No measured results" if row is None else str(row["Method"])
+    if "Method" not in bench_df:
         return [
-            ("Mask reduction", "—", "Requires adaptive and dense results"),
-            ("Image AUROC", image_auroc, image_method),
-            ("Cached latency gain", "—", "Requires adaptive and dense results"),
+            ("Mask reduction", "—", "Unavailable: adaptive and dense results required"),
+            ("Image AUROC", "—", "No measured results"),
+            (
+                "Cached latency gain",
+                "—",
+                "Unavailable: adaptive and dense results required",
+            ),
         ]
 
-    adaptive = adaptive_rows.iloc[0]
-    dense = dense_rows.iloc[0]
-    adaptive_latency = float(adaptive["Cached-latent Latency (ms)"])
+    adaptive_rows = bench_df.loc[bench_df["Method"] == "Adaptive I-JEPA"]
+    dense_rows = bench_df.loc[bench_df["Method"] == "Dense-mask I-JEPA"]
+    adaptive = adaptive_rows.iloc[0] if not adaptive_rows.empty else None
+    dense = dense_rows.iloc[0] if not dense_rows.empty else None
+
+    def metric(row: pd.Series[Any] | None, column: str) -> float | None:
+        if row is None:
+            return None
+        value = row.get(column)
+        if (
+            value is None
+            or isinstance(value, bool)
+            or not isinstance(value, int | float | np.number)
+            or not np.isfinite(value)
+        ):
+            return None
+        return float(value)
+
+    image_row = (
+        adaptive
+        if metric(adaptive, "Image AUROC (%)") is not None
+        else next(
+            (
+                row
+                for _, row in bench_df.iterrows()
+                if metric(row, "Image AUROC (%)") is not None
+            ),
+            None,
+        )
+    )
+    image_value = metric(image_row, "Image AUROC (%)")
+    image_method = (
+        str(image_row.get("Method", "Unknown")) if image_row is not None else ""
+    )
+    adaptive_masks = metric(adaptive, "Avg Evaluated Masks")
+    dense_masks = metric(dense, "Avg Evaluated Masks")
+    if adaptive is None or dense is None:
+        reduction = None
+    else:
+        reduction = metric(adaptive, "Mask Reduction vs Dense (%)")
+        if (
+            reduction is None
+            and adaptive_masks is not None
+            and dense_masks is not None
+            and dense_masks > 0
+        ):
+            reduction = 100.0 * (1 - adaptive_masks / dense_masks)
+    adaptive_latency = metric(adaptive, "Cached-latent Latency (ms)")
+    dense_latency = metric(dense, "Cached-latent Latency (ms)")
     latency_gain = (
-        float(dense["Cached-latent Latency (ms)"]) / adaptive_latency
-        if adaptive_latency > 0
-        else float("nan")
+        dense_latency / adaptive_latency
+        if dense_latency is not None
+        and adaptive_latency is not None
+        and dense_latency >= 0
+        and adaptive_latency > 0
+        else None
     )
     return [
         (
             "Mask reduction",
-            f"{adaptive['Mask Reduction vs Dense (%)']:.1f} %",
-            "Adaptive vs Dense (pilot)",
+            f"{reduction:.1f} %" if reduction is not None else "—",
+            (
+                "Adaptive vs Dense (pilot)"
+                if reduction is not None
+                else "Unavailable: adaptive and dense results required"
+            ),
         ),
         (
             "Image AUROC",
-            f"{adaptive['Image AUROC (%)']:.1f} %",
-            "Adaptive, macro average",
+            f"{image_value:.1f} %" if image_value is not None else "—",
+            image_method if image_value is not None else "Unavailable",
         ),
         (
             "Cached latency gain",
-            f"{latency_gain:.1f}×" if np.isfinite(latency_gain) else "—",
-            "Adaptive vs Dense",
+            f"{latency_gain:.1f}×" if latency_gain is not None else "—",
+            (
+                "Adaptive vs Dense"
+                if latency_gain is not None
+                else "Unavailable: cached latency measurements required"
+            ),
         ),
     ]
 
@@ -263,10 +342,18 @@ def load_category_auroc_breakdown() -> tuple[pd.DataFrame, bool]:
         by_category: dict[str, dict[str, Any]] = {}
         for mode, rows in pilot_results.items():
             for row in rows:
-                category = row["category"]
+                category = row.get("category")
+                if not isinstance(category, str):
+                    continue
                 by_category.setdefault(category, {"Category": category})[
                     PILOT_MODE_LABELS[mode]
-                ] = 100.0 * float(row["image_auroc"])
+                ] = (
+                    100.0 * float(row["image_auroc"])
+                    if isinstance(row.get("image_auroc"), int | float)
+                    and not isinstance(row.get("image_auroc"), bool)
+                    and np.isfinite(row["image_auroc"])
+                    else float("nan")
+                )
         return (
             pd.DataFrame([by_category[name] for name in sorted(by_category)]),
             False,

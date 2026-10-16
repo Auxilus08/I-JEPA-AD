@@ -12,28 +12,24 @@ Provides:
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import time
+import warnings
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-import torch
 from PIL import Image
 
-from ijepa_ad.caching.cache_schema import is_safe_name
-from ijepa_ad.caching.latent_cache import compute_file_sha256
-from ijepa_ad.data.transforms import preprocess_image
-from ijepa_ad.encoder.ijepa_wrapper import IJEPAEncoder
-from ijepa_ad.inference import (
-    InferenceMode,
-    MaskedLatentScorer,
-    load_masking_settings,
-    load_predictor_checkpoint,
-)
-from ijepa_ad.predictor.transformer_predictor import LatentTransformerPredictor
+if TYPE_CHECKING:
+    from ijepa_ad.inference import InferenceMode
 
-PYTORCH_AVAILABLE = True
+PYTORCH_AVAILABLE = (
+    importlib.util.find_spec("torch") is not None
+    and importlib.util.find_spec("ijepa_ad") is not None
+)
 REAL_METHODS: dict[str, InferenceMode] = {
     "adaptive_ijepa": "adaptive",
     "dense_masked_ijepa": "dense",
@@ -157,13 +153,59 @@ def _project_root() -> Path:
 
 @lru_cache(maxsize=1)
 def _checkpoint_sha256(root: str) -> str:
-    return str(
-        compute_file_sha256(Path(root) / "checkpoints" / "IN22K-vit.g.16-600e.pth.tar")
-    )
+    checkpoint = Path(root) / "checkpoints" / "IN22K-vit.g.16-600e.pth.tar"
+    stat = checkpoint.stat()
+    cache_path = checkpoint.with_name(checkpoint.name + ".sha256.json")
+    cached: Any = None
+    try:
+        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        pass
+    except json.JSONDecodeError as exc:
+        warnings.warn(
+            f"Ignoring invalid encoder hash cache {cache_path}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+
+    if (
+        isinstance(cached, dict)
+        and cached.get("size") == stat.st_size
+        and cached.get("mtime_ns") == stat.st_mtime_ns
+        and isinstance(cached.get("sha256"), str)
+        and len(cached["sha256"]) == 64
+        and all(char in "0123456789abcdef" for char in cached["sha256"])
+    ):
+        return cached["sha256"]
+
+    from ijepa_ad.caching.latent_cache import compute_file_sha256
+
+    digest = str(compute_file_sha256(checkpoint))
+    try:
+        cache_path.write_text(
+            json.dumps(
+                {
+                    "size": stat.st_size,
+                    "mtime_ns": stat.st_mtime_ns,
+                    "sha256": digest,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        warnings.warn(
+            f"Could not persist encoder hash cache {cache_path}: {exc}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    return digest
 
 
 @lru_cache(maxsize=1)
-def _load_encoder(root: str, device_name: str) -> IJEPAEncoder:
+def _load_encoder(root: str, device_name: str) -> Any:
+    from ijepa_ad.encoder.ijepa_wrapper import IJEPAEncoder
+
     project = Path(root)
     checkpoint = project / "checkpoints" / "IN22K-vit.g.16-600e.pth.tar"
     official_repo = project / "external" / "ijepa"
@@ -175,9 +217,10 @@ def _load_encoder(root: str, device_name: str) -> IJEPAEncoder:
 
 
 @lru_cache(maxsize=3)
-def _load_predictor(
-    root: str, category: str, device_name: str
-) -> LatentTransformerPredictor:
+def _load_predictor(root: str, category: str, device_name: str) -> Any:
+    from ijepa_ad.caching.cache_schema import is_safe_name
+    from ijepa_ad.inference import load_predictor_checkpoint
+
     if not is_safe_name(category):
         raise ValueError(f"invalid MVTec category: {category!r}")
     path = Path(root) / "checkpoints" / "predictors" / f"{category}_cosine.pt"
@@ -191,7 +234,7 @@ def _load_predictor(
     )
 
 
-def _detected_regions(
+def detected_regions_for_threshold(
     heatmap: np.ndarray[Any, Any],
     image_size: tuple[int, int],
     image_score: float,
@@ -200,23 +243,62 @@ def _detected_regions(
 ) -> list[dict[str, Any]]:
     if image_score <= anomaly_threshold or float(heatmap.max()) == float(heatmap.min()):
         return []
+    minimum = float(heatmap.min())
     cutoff = float(np.quantile(heatmap, 0.95))
-    rows, columns = np.where(heatmap >= cutoff)
+    selected = heatmap > minimum if cutoff <= minimum else heatmap >= cutoff
     width, height = image_size
     scale_x, scale_y = width / heatmap.shape[1], height / heatmap.shape[0]
-    box = [
-        max(0, int(columns.min() * scale_x)),
-        max(0, int(rows.min() * scale_y)),
-        min(width, int((columns.max() + 1) * scale_x)),
-        min(height, int((rows.max() + 1) * scale_y)),
-    ]
-    return [
-        {
-            "box": box,
-            "confidence": round(image_score, 3),
-            "label": f"Anomaly ({category})",
-        }
-    ]
+    regions = []
+    for min_row, min_column, max_row, max_column in _component_bounds(selected):
+        regions.append(
+            {
+                "box": [
+                    max(0, int(min_column * scale_x)),
+                    max(0, int(min_row * scale_y)),
+                    min(width, int(max_column * scale_x)),
+                    min(height, int(max_row * scale_y)),
+                ],
+                "confidence": round(image_score, 3),
+                "label": f"Anomaly ({category})",
+            }
+        )
+    return regions
+
+
+def _component_bounds(mask: np.ndarray[Any, Any]) -> list[tuple[int, int, int, int]]:
+    height, width = mask.shape
+    visited = np.zeros(mask.size, dtype=bool)
+    bounds: list[tuple[int, int, int, int]] = []
+
+    for start in np.flatnonzero(mask):
+        if visited[start]:
+            continue
+        visited[start] = True
+        stack = [int(start)]
+        min_row = max_row = int(start) // width
+        min_column = max_column = int(start) % width
+        while stack:
+            index = stack.pop()
+            row, column = divmod(index, width)
+            min_row = min(min_row, row)
+            max_row = max(max_row, row)
+            min_column = min(min_column, column)
+            max_column = max(max_column, column)
+            neighbors = []
+            if row:
+                neighbors.append(index - width)
+            if row + 1 < height:
+                neighbors.append(index + width)
+            if column:
+                neighbors.append(index - 1)
+            if column + 1 < width:
+                neighbors.append(index + 1)
+            for neighbor in neighbors:
+                if mask.flat[neighbor] and not visited[neighbor]:
+                    visited[neighbor] = True
+                    stack.append(neighbor)
+        bounds.append((min_row, min_column, max_row + 1, max_column + 1))
+    return bounds
 
 
 def _run_real_inference(
@@ -225,6 +307,23 @@ def _run_real_inference(
     category: str | None,
     anomaly_threshold: float,
 ) -> dict[str, Any]:
+    if not PYTORCH_AVAILABLE:
+        raise RuntimeError(
+            "Real inference requires both PyTorch and the ijepa_ad package; "
+            "install the project dependencies or enable synthetic mock mode."
+        )
+    try:
+        import torch
+    except ImportError as exc:
+        raise RuntimeError(
+            "Real inference requires PyTorch; install the project dependencies "
+            "or enable synthetic mock mode."
+        ) from exc
+
+    from ijepa_ad.caching.cache_schema import is_safe_name
+    from ijepa_ad.data.transforms import preprocess_image
+    from ijepa_ad.inference import MaskedLatentScorer, load_masking_settings
+
     if category is None:
         raise ValueError("category is required for real I-JEPA inference")
     if method not in REAL_METHODS:
@@ -262,7 +361,7 @@ def _run_real_inference(
         "image_score": image_score,
         "pixel_heatmap": heatmap,
         "overlay": None,
-        "detected_regions": _detected_regions(
+        "detected_regions": detected_regions_for_threshold(
             heatmap, image.size, image_score, anomaly_threshold, category
         ),
         "mask_count": scores.evaluated_regions,

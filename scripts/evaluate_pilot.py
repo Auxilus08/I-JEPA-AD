@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import torch
@@ -35,12 +36,23 @@ def main() -> int:
         default=Path("configs/masking/coarse_to_fine.yaml"),
     )
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--threshold", type=float)
+    parser.add_argument(
+        "--masking-threshold",
+        type=float,
+        help=(
+            "non-negative threshold that gates adaptive fine masking; "
+            "not the validation-calibrated image decision threshold"
+        ),
+    )
     parser.add_argument("--target-fpr", type=float, default=0.05)
     parser.add_argument("--num-thresholds", type=int, default=200)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    if args.masking_threshold is not None and (
+        not math.isfinite(args.masking_threshold) or args.masking_threshold < 0
+    ):
+        parser.error("--masking-threshold must be finite and non-negative")
     if args.device.startswith("cuda") and not torch.cuda.is_available():
         parser.error("CUDA device requested but CUDA is unavailable")
     summary = evaluate_pilot(
@@ -52,7 +64,7 @@ def main() -> int:
         device=args.device,
         mode=args.mode,
         masking_config=args.masking_config,
-        threshold=args.threshold,
+        masking_threshold=args.masking_threshold,
         target_fpr=args.target_fpr,
         num_thresholds=args.num_thresholds,
     )
