@@ -61,6 +61,17 @@ class IJEPAEncoder(nn.Module):
             parameter.requires_grad_(False)
         self._assert_frozen()
 
+    def train(self, mode: bool = True) -> IJEPAEncoder:
+        """Stay in eval mode: a parent module's ``.train()`` must not unfreeze us."""
+        super().train(False)
+        return self
+
+    def requires_grad_(self, requires_grad: bool = True) -> IJEPAEncoder:
+        if requires_grad:
+            raise RuntimeError("the I-JEPA encoder is frozen and cannot require grad")
+        super().requires_grad_(False)
+        return self
+
     def encode(self, image_batch: Tensor) -> Tensor:
         """Encode ``N×3×224×224`` images as ``N×196×1408`` patch latents."""
         if image_batch.ndim != 4:
@@ -73,6 +84,12 @@ class IJEPAEncoder(nn.Module):
                 f"{tuple(image_batch.shape)}"
             )
 
+        # Re-assert the frozen state: ``self.model`` can be switched directly.
+        self.model.eval()
+        self._assert_frozen()
+        parameter = next(self.model.parameters(), None)
+        if parameter is not None:
+            image_batch = image_batch.to(device=parameter.device, dtype=parameter.dtype)
         with torch.inference_mode():
             latents = self.model(image_batch)
         if latents.shape != (image_batch.shape[0], NUM_PATCHES, EMBEDDING_DIM):
@@ -89,7 +106,8 @@ class IJEPAEncoder(nn.Module):
             for name, parameter in self.model.named_parameters()
             if parameter.requires_grad
         ]
-        assert not trainable, f"I-JEPA encoder parameters are trainable: {trainable}"
+        if trainable:
+            raise RuntimeError(f"I-JEPA encoder parameters are trainable: {trainable}")
 
 
 def _build_meta_vitg16(official_repo_path: str | Path | None) -> nn.Module:

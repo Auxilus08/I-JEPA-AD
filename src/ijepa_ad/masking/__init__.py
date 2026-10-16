@@ -10,7 +10,12 @@ from .coarse_masker import (
 )
 from .fine_masker import FineMasker, FineSelection, select_suspicious_regions
 from .fusion import fuse_anomaly_scores, fuse_scores, score_fusion
-from .score_maps import anomaly_heatmap, build_heatmap, patch_scores_to_heatmap
+from .score_maps import (
+    anomaly_heatmap,
+    build_heatmap,
+    patch_scores_to_heatmap,
+    upsample_patch_scores,
+)
 
 __all__ = [
     "AdaptiveMaskingEngine",
@@ -29,4 +34,5 @@ __all__ = [
     "score_fusion",
     "select_suspicious_regions",
     "latent_anomaly_scores",
+    "upsample_patch_scores",
 ]

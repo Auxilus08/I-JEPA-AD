@@ -127,6 +127,7 @@ def test_predictor_overfits_tiny_synthetic_cache_and_saves_checkpoint(
     _write_cache(tmp_path, "val", 4)
     train = load_cached_latent_dataset(tmp_path, _expected("train"))
     val = load_cached_latent_dataset(tmp_path, _expected("val"))
+    torch.manual_seed(0)  # model init is outside train_predictor's own seeding
     model = LatentTransformerPredictor(
         PredictorConfig(
             embedding_dim=DIM,

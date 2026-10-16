@@ -482,3 +482,50 @@ dependencies, and checkpoint loader searched for non-existent JSONL files.
 **Outcome after change:** All quality checks pass (`ruff check .`, `black --check .`,
 `mypy src tests frontend` 0 errors across 63 files, 8/8 frontend unit tests pass).
 CI workflow updated.
+## [2026-10-16] Notebook predictor and augmentation workflow
+**Context:** The project needed a proper predictor-training notebook with checkpoint persistence and a separate data-augmentation workflow.
+**Options considered:** Keep the existing demo notebook; augment cached latent tensors; augment nominal images before encoding and use a separate cache/checkpoint root.
+**Decision:** Make the training notebook use the existing validated cache and training APIs and save one best checkpoint per category. Add a separate notebook that applies deterministic image-space augmentation only to the nominal training subset, keeps original validation images, and writes augmented caches/checkpoints separately.
+**Rationale:** Image-space augmentation produces valid encoder inputs, avoids corrupting latent geometry, prevents test leakage, and preserves a directly comparable non-augmented baseline.
+**Baseline / prior state:** An untracked demo notebook with hardcoded pilot settings and mock mode enabled by default.
+**Outcome after change:** Two reproducible notebooks and an augmentation config are present; execution remains pending on the local encoder/checkpoint setup.
+
+## [2026-10-17] Inference-aligned predictor training masks
+**Context:** An audit found training used ~40% scattered random target masks, while inference hides one contiguous 4x4 coarse window (16/8/4 tokens on the 14x14 grid) and then single tokens. Measured on the actual samplers: training masks averaged 25 connected components with 60% of each masked token's 4-neighbours visible, and a given 4x4 block is fully masked with probability 0.4^16 (~4e-7); coarse windows leave 23% visible. A synthetic-latent experiment (not real data) showed a predictor trained on scattered masks scoring worse on blocks than one trained on blocks. Validation and early stopping also used the scattered masks.
+**Options considered:** (a) keep scattered masks and rely on generalisation; (b) block-only masks; (c) a per-row mixture of exact coarse windows and isolated single tokens; (d) multi-scale random rectangles.
+**Decision:** Add `mask_strategy: inference_aligned` (c): each row targets either one of the grid-aligned `CoarseMasker` windows (the exact inference masks) with probability `block_probability`, or `single_token_count` mutually non-adjacent tokens standing in for 1x1 masks. Sampler in `predictor/target_masks.py`; validation uses the same sampler with its fixed seed. The `TrainingConfig` default stays `random` so existing callers, tests and checkpoints keep their behaviour; `configs/predictor/base.yaml` and the CLI select `inference_aligned`.
+**Rationale:** Exact coarse windows remove the dominant shift with no new hyperparameter (`block_size` must equal `coarse_size`; a test enforces it). Several isolated singles per row give ~8x more loss terms per forward pass than one 1x1 target, at the cost of a slightly sparser context than a true 1x1 mask (documented trade-off). Leakage prevention is unchanged: targets are overwritten by the mask token inside the predictor, and a test shows rewriting target latents leaves outputs bit-identical.
+**Baseline / prior state:** `build_random_target_mask` only (kept, used by `random`).
+**Outcome after change:** Unit and integration tests pass. The effect on real metrics is pending a real-data pilot; predictors trained with scattered masks must be retrained and earlier pilot numbers are not comparable.
+
+## [2026-10-17] One bilinear upsampling rule for evaluation and UI heatmaps
+**Context:** `patch_scores_to_heatmap` used nearest-neighbour plus per-image min-max, while the evaluation runner interpolated raw scores bilinearly (`align_corners=False`). The PRD specifies bilinear.
+**Options considered:** leave the paths separate; make the UI bilinear only; share one upsampling function with normalisation as a separate display-only step.
+**Decision:** `masking/score_maps.py` now has `upsample_patch_scores` (raw, bilinear, `align_corners=False`) used by `evaluation/runner.py`, and `patch_scores_to_heatmap(..., normalize=True)` which min-max scales that same interpolation for display only.
+**Rationale:** One interpolation rule; evaluation scores are never rescaled per image. The runner's maths is identical to before (same `F.interpolate` call), so pixel AUROC/AUPRO are not changed by this edit (`evaluation/metrics.py` untouched).
+**Baseline / prior state:** Nearest upsampling in the UI path; inline interpolation in the runner.
+**Outcome after change:** `tests/unit/test_score_maps.py` pins equivalence with `F.interpolate`, score-scale preservation, and row-major token mapping.
+
+## [2026-10-17] Fingerprinted augmentation outputs and content-hash sample ids
+**Context:** Notebook 02 skipped an augmented image if a file of the same name existed, named samples `<id16>_augNN` (not content), and reused the augmentation seed as the nominal-split seed, so changing augmentation settings could silently reuse old images/latents or reshuffle the validation set.
+**Options considered:** delete outputs on every run; add the settings to the cache schema; fingerprint the settings into the output directory and use file content hashes as sample ids.
+**Decision:** `data/augmentation.py`: `AugmentationConfig.fingerprint()` (settings + `AUGMENTATION_VERSION`) names the output directory; augmented sample ids are the SHA-256 of the written PNG; writes are atomic. The split now reads `nominal_split` from `configs/data/mvtec.yaml`, independent of `augmentation.seed`; the evaluation runner takes `val_fraction`/`split_seed` explicitly (defaults unchanged).
+**Rationale:** Cache validity is already keyed by `sample_ids`, checkpoint SHA and preprocessing spec; making the ids content hashes closes the only gap without a schema change, and old fingerprint directories are preserved rather than deleted.
+**Baseline / prior state:** Flat output directory, name-based ids, split seed = augmentation seed (both 0 today, so existing splits are unchanged).
+**Outcome after change:** `tests/unit/test_augmentation.py` and `tests/integration/test_augmented_cache_invalidation.py`.
+
+## [2026-10-17] Capsule horizontal flip disabled; rotation fills with border colour
+**Context:** Capsule images have a black cap on the left and an orange body with a "500" imprint and the "actavis" logo on the right (inspected visually); `faulty_imprint` is a test defect class. Rotation filled corners with black, which paints dark wedges onto the bright MVTec backgrounds.
+**Options considered:** keep the flip everywhere; remove it for all categories; per-category override.
+**Decision:** `category_overrides.capsule.horizontal_flip_probability: 0.0` in `configs/augmentation/base.yaml`; bottle and hazelnut keep 0.5. Rotation corners use the image's border median colour.
+**Rationale:** A mirrored capsule (cap on the right, reversed print) never occurs in nominal or test data, so it would widen the "normal" manifold toward reversed print. Bottle and hazelnut are not chirally marked. The fill-colour change affects all categories and is part of `AUGMENTATION_VERSION` 2, hence new fingerprints.
+**Baseline / prior state:** Flip p=0.5 everywhere, black fill.
+**Outcome after change:** Tests cover per-category resolution, flip on/off pixel equality, and bright corners; no augmented artifacts existed to invalidate.
+
+## [2026-10-17] Frozen-encoder lock, dtype guards and training provenance
+**Context:** `IJEPAEncoder.train()` flipped the wrapper to train mode; `_assert_frozen` used `assert`; the predictor gave an opaque error on a latent/parameter dtype mismatch; checkpoints lacked seeds and code provenance.
+**Options considered:** document the hazards; auto-cast inside the predictor; fail fast.
+**Decision:** `IJEPAEncoder.train()` always stays in eval, `requires_grad_(True)` raises, `encode()` re-asserts eval and frozen parameters (a `RuntimeError`, not `assert`) and casts input to the model's device/dtype. `LatentTransformerPredictor.forward` raises a clear `TypeError` on dtype mismatch (callers already cast); losses reduce in at least float32; training raises `FloatingPointError` on a non-finite loss; checkpoints gain a `reproducibility` block (seeds, mask strategy, torch/python versions, git commit and dirty flag).
+**Rationale:** Cheap invariants that fail loudly. Gradient clipping, an LR scheduler, AMP and optimizer-state saving were considered and not added: the 14M-parameter predictor fits comfortably in 8 GB in float32, the cosine loss is bounded, and there is no evidence of instability, so default hyperparameters stay untouched.
+**Baseline / prior state:** See context.
+**Outcome after change:** `tests/unit/test_dtype_and_freeze_safety.py`, `tests/integration/test_predictor_training_masks.py`. An existing flaky test (`test_predictor_overfits_tiny_synthetic_cache_and_saves_checkpoint` failed for one of 12 global seeds because model init was unseeded) now seeds before construction.

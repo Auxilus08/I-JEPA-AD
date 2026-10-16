@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import platform
+import subprocess
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -22,11 +24,15 @@ from ijepa_ad.predictor.cache_dataset import (
     load_cached_latent_dataset,
 )
 from ijepa_ad.predictor.losses import prediction_loss
+from ijepa_ad.predictor.target_masks import build_inference_aligned_target_mask
 from ijepa_ad.predictor.transformer_predictor import (
     LatentTransformerPredictor,
     PredictorConfig,
 )
 from ijepa_ad.utils.seeding import set_seed
+
+MASK_STRATEGIES = ("random", "inference_aligned")
+VALIDATION_MASK_SEED_OFFSET = 10_000
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,15 @@ class TrainingConfig:
     min_delta: float
     seed: int
     device: str
+    # ``random`` keeps the original scattered ``mask_ratio`` masks (and the default,
+    # so existing callers/checkpoints behave as before). ``inference_aligned`` draws
+    # the coarse-window / isolated-token targets used at inference; see
+    # ``ijepa_ad.predictor.target_masks``. The sampler fields are ignored by
+    # ``random``; ``mask_ratio`` is ignored by ``inference_aligned``.
+    mask_strategy: str = "random"
+    block_size: int = 4
+    block_probability: float = 0.5
+    single_token_count: int = 8
 
     def __post_init__(self) -> None:
         if self.batch_size <= 0:
@@ -63,6 +78,14 @@ class TrainingConfig:
             raise ValueError("min_delta must be non-negative")
         if self.seed < 0:
             raise ValueError("seed must be non-negative")
+        if self.mask_strategy not in MASK_STRATEGIES:
+            raise ValueError(f"mask_strategy must be one of {MASK_STRATEGIES}")
+        if self.block_size < 1:
+            raise ValueError("block_size must be positive")
+        if not 0 <= self.block_probability <= 1:
+            raise ValueError("block_probability must be in [0, 1]")
+        if self.single_token_count < 1:
+            raise ValueError("single_token_count must be positive")
 
     def to_dict(self) -> dict[str, int | float | str]:
         return asdict(self)
@@ -141,7 +164,9 @@ def train_predictor(
             ),
             config,
             device,
-            torch.Generator(device="cpu").manual_seed(config.seed + 10_000),
+            torch.Generator(device="cpu").manual_seed(
+                config.seed + VALIDATION_MASK_SEED_OFFSET
+            ),
         )
         history.append(EpochMetrics(epoch, train_loss, val_loss))
         if val_loss < best_val - config.min_delta:
@@ -193,6 +218,27 @@ def build_random_target_mask(
     return mask.scatter(1, indices, True)
 
 
+def build_target_mask(
+    config: TrainingConfig,
+    batch_size: int,
+    num_tokens: int,
+    generator: torch.Generator,
+) -> Tensor:
+    """Sample the target mask for ``config.mask_strategy`` (CPU, boolean)."""
+    if config.mask_strategy == "inference_aligned":
+        return build_inference_aligned_target_mask(
+            batch_size,
+            num_tokens,
+            generator,
+            block_size=config.block_size,
+            block_probability=config.block_probability,
+            single_token_count=config.single_token_count,
+        )
+    return build_random_target_mask(
+        batch_size, num_tokens, config.mask_ratio, generator
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI for later GPU training once real latent caches exist."""
     parser = _parser()
@@ -220,6 +266,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         learning_rate=args.learning_rate,
         weight_decay=args.weight_decay,
         mask_ratio=args.mask_ratio,
+        mask_strategy=args.mask_strategy,
+        block_size=args.block_size,
+        block_probability=args.block_probability,
+        single_token_count=args.single_token_count,
         loss_type=args.loss_type,
         patience=args.patience,
         min_delta=args.min_delta,
@@ -253,8 +303,8 @@ def _run_epoch(
     dtype = next(model.parameters()).dtype
     for batch in batches:
         latents = batch.latents.to(device=device, dtype=dtype)
-        mask = build_random_target_mask(
-            latents.shape[0], latents.shape[1], config.mask_ratio, mask_generator
+        mask = build_target_mask(
+            config, latents.shape[0], latents.shape[1], mask_generator
         ).to(device)
         if training:
             assert optimizer is not None
@@ -262,6 +312,10 @@ def _run_epoch(
         with torch.set_grad_enabled(training):
             predicted = model(latents, mask)
             loss = prediction_loss(predicted, latents, mask, config.loss_type)
+        if not bool(torch.isfinite(loss.detach())):
+            raise FloatingPointError(
+                f"non-finite {config.loss_type} loss; refusing to continue training"
+            )
         if training:
             assert optimizer is not None
             loss.backward()
@@ -308,6 +362,7 @@ def _save_checkpoint(
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "cache_provenance": _cache_provenance(train_dataset, val_dataset),
+        "reproducibility": _reproducibility_info(config),
     }
     torch.save(payload, path)
 
@@ -337,6 +392,38 @@ def _validate_training_inputs(
         raise ValueError("val embedding_dim does not match model")
     if val_dataset.cache.metadata.num_tokens != model.config.num_tokens:
         raise ValueError("val num_tokens does not match model")
+
+
+def _reproducibility_info(config: TrainingConfig) -> dict[str, Any]:
+    """Seeds and software state needed to rerun a training job."""
+    commit = _git_output("rev-parse", "HEAD")
+    status = _git_output("status", "--porcelain", "--untracked-files=no")
+    return {
+        "seed": config.seed,
+        "train_mask_seed": config.seed,
+        "shuffle_seed": "seed + epoch",
+        "validation_mask_seed": config.seed + VALIDATION_MASK_SEED_OFFSET,
+        "mask_strategy": config.mask_strategy,
+        "torch_version": str(torch.__version__),
+        "python_version": platform.python_version(),
+        "git_commit": commit,
+        "git_dirty": None if status is None else bool(status),
+    }
+
+
+def _git_output(*arguments: str) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", *arguments],
+            cwd=Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return completed.stdout.strip()
 
 
 def _cache_provenance(
@@ -414,6 +501,12 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--learning-rate", type=float, default=0.0001)
     parser.add_argument("--weight-decay", type=float, default=0.05)
     parser.add_argument("--mask-ratio", type=float, default=0.4)
+    parser.add_argument(
+        "--mask-strategy", choices=MASK_STRATEGIES, default="inference_aligned"
+    )
+    parser.add_argument("--block-size", type=int, default=4)
+    parser.add_argument("--block-probability", type=float, default=0.5)
+    parser.add_argument("--single-token-count", type=int, default=8)
     parser.add_argument("--loss-type", choices=("cosine", "l2"), default="cosine")
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--min-delta", type=float, default=0.0)
