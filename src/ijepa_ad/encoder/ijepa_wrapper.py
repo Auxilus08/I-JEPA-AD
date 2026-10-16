@@ -126,4 +126,26 @@ def _extract_target_encoder(checkpoint: dict[str, Any]) -> dict[str, Tensor]:
         raise KeyError(
             "Meta I-JEPA checkpoint is missing its 'target_encoder' state dict"
         )
-    return state_dict
+
+    keys = tuple(state_dict)
+    if not all(isinstance(key, str) for key in keys):
+        raise TypeError("I-JEPA target_encoder state-dict keys must be strings")
+    has_module_prefix = tuple(key.startswith("module.") for key in keys)
+    if any(has_module_prefix) and not all(has_module_prefix):
+        raise ValueError(
+            "I-JEPA target_encoder state dict mixes distributed and unprefixed keys"
+        )
+
+    strip_module_prefix = bool(keys) and all(has_module_prefix)
+    normalized: dict[str, Tensor] = {}
+    for key, value in state_dict.items():
+        if not isinstance(value, Tensor):
+            raise TypeError(f"I-JEPA target_encoder value for {key!r} is not a tensor")
+        normalized_key = key.removeprefix("module.") if strip_module_prefix else key
+        if normalized_key in normalized:
+            raise ValueError(
+                f"I-JEPA target_encoder key collision after prefix normalization: "
+                f"{normalized_key}"
+            )
+        normalized[normalized_key] = value
+    return normalized

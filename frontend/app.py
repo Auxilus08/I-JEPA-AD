@@ -10,10 +10,15 @@ from PIL import Image
 
 from frontend.components.visualizer import create_heatmap_overlay, draw_detected_regions
 from frontend.config import load_frontend_config
-from frontend.services.backend_interface import PYTORCH_AVAILABLE, run_inference
+from frontend.services.backend_interface import (
+    PYTORCH_AVAILABLE,
+    REAL_METHODS,
+    run_inference,
+)
 from frontend.services.experiment_service import (
     load_benchmark_summary,
     load_category_auroc_breakdown,
+    load_category_threshold,
     load_training_history,
 )
 
@@ -192,17 +197,35 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    force_mock = st.checkbox("Synthetic mock mode", value=False)
+    root_dir = Path(__file__).resolve().parent.parent
+    predictor_dir = root_dir / "checkpoints" / "predictors"
+    available_categories = [
+        category
+        for category in categories
+        if (predictor_dir / f"{category}_cosine.pt").is_file()
+    ]
+    category_options = (
+        categories if force_mock or not available_categories else available_categories
+    )
+    if not force_mock and not available_categories:
+        st.warning(
+            "No real predictor checkpoints are available; enable mock mode to demo."
+        )
+
     selected_category = st.selectbox(
         "Category",
-        options=categories,
+        options=category_options,
         index=(
-            categories.index(defaults.get("category", "bottle"))
-            if defaults.get("category") in categories
+            category_options.index(defaults.get("category", "bottle"))
+            if defaults.get("category") in category_options
             else 0
         ),
     )
 
     method_keys = list(methods.keys())
+    if not force_mock:
+        method_keys = [method for method in method_keys if method in REAL_METHODS]
     selected_method = st.selectbox(
         "Detection Method",
         options=method_keys,
@@ -216,13 +239,28 @@ with st.sidebar:
 
     st.markdown("<div style='height:0.6rem'></div>", unsafe_allow_html=True)
 
+    configured_threshold = float(defaults.get("anomaly_threshold", 0.50))
+    if force_mock:
+        anomaly_threshold_default = configured_threshold
+        threshold_is_calibrated = False
+    else:
+        anomaly_threshold_default, threshold_is_calibrated = load_category_threshold(
+            selected_category,
+            mode=REAL_METHODS[selected_method],
+            default=configured_threshold,
+        )
     anomaly_threshold = st.slider(
         "Decision Threshold",
-        0.10,
-        0.95,
-        float(defaults.get("anomaly_threshold", 0.50)),
-        0.02,
+        0.0,
+        1.0,
+        anomaly_threshold_default,
+        0.01,
     )
+    if threshold_is_calibrated:
+        st.caption(
+            "Threshold calibrated using nominal validation data for the selected "
+            "category and method."
+        )
     overlay_alpha = st.slider(
         "Overlay Opacity",
         0.10,
@@ -234,14 +272,14 @@ with st.sidebar:
 
     st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
 
-    force_mock = st.checkbox("Synthetic mock mode", value=True)
-
     # Asset status
-    root_dir = Path(__file__).resolve().parent.parent
-    has_checkpoints = (root_dir / "results" / "predictor").is_dir() and any(
-        (root_dir / "results" / "predictor").glob("*.pt")
-    )
-    has_dataset = (root_dir / "data").is_dir() and any((root_dir / "data").glob("*"))
+    has_encoder_checkpoint = (
+        root_dir / "checkpoints" / "IN22K-vit.g.16-600e.pth.tar"
+    ).is_file()
+    has_checkpoints = any(predictor_dir.glob("*_cosine.pt"))
+    has_dataset = (root_dir / "data" / "raw" / "mvtec_ad").is_dir()
+    encoder_status = "available" if has_encoder_checkpoint else "not mounted"
+    predictor_status = "available" if has_checkpoints else "not trained"
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
     st.markdown(
@@ -257,7 +295,11 @@ with st.sidebar:
         </div>
         <div class='status-row'>
             <span class='{"dot-ok" if has_checkpoints else "dot-warn"}'></span>
-            Checkpoint {"loaded" if has_checkpoints else "not mounted"}
+            Encoder checkpoint {encoder_status}
+        </div>
+        <div class='status-row'>
+            <span class='{"dot-ok" if has_checkpoints else "dot-warn"}'></span>
+            Cosine predictors {predictor_status}
         </div>
         <div class='status-row'>
             <span class='{"dot-ok" if has_dataset else "dot-warn"}'></span>
@@ -348,15 +390,25 @@ with tab_infer:
 
         if run_btn and sample_image is not None:
             with st.spinner("Evaluating masked patch discrepancy…"):
-                result = run_inference(
-                    image=sample_image,
-                    method=selected_method,
-                    category=selected_category,
-                    use_mock=force_mock,
-                    anomaly_threshold=anomaly_threshold,
-                )
-                st.session_state["inspection_result"] = result
-                st.session_state["inspected_image"] = sample_image
+                try:
+                    result = run_inference(
+                        image=sample_image,
+                        method=selected_method,
+                        category=selected_category,
+                        use_mock=force_mock,
+                        anomaly_threshold=anomaly_threshold,
+                    )
+                except (
+                    FileNotFoundError,
+                    NotImplementedError,
+                    RuntimeError,
+                    ValueError,
+                ) as error:
+                    st.session_state["inspection_result"] = None
+                    st.error(f"Inference failed: {error}")
+                else:
+                    st.session_state["inspection_result"] = result
+                    st.session_state["inspected_image"] = sample_image
 
     with col_right:
         st.markdown("<p class='section-title'>Results</p>", unsafe_allow_html=True)
@@ -366,8 +418,9 @@ with tab_infer:
 
         if current_result is not None and current_img is not None:
             score = float(current_result["image_score"])
-            is_anomalous = score >= anomaly_threshold
+            is_anomalous = score > anomaly_threshold
             mask_count = int(current_result["mask_count"])
+            total_regions = int(current_result.get("total_regions", 196))
             latency = float(current_result["latency_ms"])
             vram = current_result.get("peak_vram_mb")
 
@@ -380,7 +433,12 @@ with tab_infer:
                     f"{score:.3f}",
                     "DEFECTIVE" if is_anomalous else "NOMINAL",
                 ),
-                (mc2, "Masks Evaluated", str(mask_count), "out of 196 patches"),
+                (
+                    mc2,
+                    "Masks Evaluated",
+                    str(mask_count),
+                    f"out of {total_regions} candidates",
+                ),
                 (mc3, "Latency", f"{latency:.1f}", "milliseconds"),
                 (
                     mc4,
@@ -444,8 +502,8 @@ with tab_infer:
             if current_result.get("is_mock"):
                 st.markdown(
                     "<p style='font-size:0.70rem; color:#4a5568; "
-                    "margin-top:0.5rem;'>Running in simulated mock mode "
-                    "&mdash; real GPU checkpoints not mounted.</p>",
+                    "margin-top:0.5rem;'>Synthetic demonstration output; "
+                    "this is not a model prediction.</p>",
                     unsafe_allow_html=True,
                 )
 
@@ -476,9 +534,8 @@ with tab_train:
     if is_synth_hist:
         st.info(
             "ℹ️ **Illustrative Training Curves:** No trained checkpoint found "
-            f"at `results/predictor/{selected_category}.pt`. Displaying "
-            "representative convergence curves for interface validation. "
-            "Real training remains pending GPU execution."
+            f"at `checkpoints/predictors/{selected_category}_cosine.pt`. Displaying "
+            "representative convergence curves for interface validation."
         )
 
     st.line_chart(
@@ -514,6 +571,12 @@ with tab_bench:
             "target literature values. Real benchmark evaluation on full MVTec AD "
             "remains pending per TRANSFER.md."
         )
+    else:
+        st.info(
+            "Measured pilot results only (Bottle, Capsule, Hazelnut). Latency is "
+            "cached-latent predictor scoring and excludes I-JEPA image encoding; "
+            "PatchCore and MAE are not yet benchmarked."
+        )
 
     st.dataframe(bench_df, use_container_width=True, hide_index=True)
 
@@ -523,11 +586,39 @@ with tab_bench:
         unsafe_allow_html=True,
     )
     h1, h2, h3 = st.columns(3)
-    for col, label, value, sub in [
-        (h1, "Mask reduction", "92.9 %", "Adaptive vs Dense"),
-        (h2, "Image AUROC", "98.4 %", "Adaptive I-JEPA (Target)"),
-        (h3, "Latency gain", "5.1×", "42.5 ms vs 218.4 ms"),
-    ]:
+    if is_synth_bench:
+        highlights = [
+            (h1, "Mask reduction", "92.9 %", "Illustrative target"),
+            (h2, "Image AUROC", "98.4 %", "Illustrative target"),
+            (h3, "Latency gain", "5.1×", "Illustrative target"),
+        ]
+    else:
+        adaptive = bench_df.loc[bench_df["Method"] == "Adaptive I-JEPA"].iloc[0]
+        dense = bench_df.loc[bench_df["Method"] == "Dense-mask I-JEPA"].iloc[0]
+        latency_gain = (
+            dense["Cached-latent Latency (ms)"] / adaptive["Cached-latent Latency (ms)"]
+        )
+        highlights = [
+            (
+                h1,
+                "Mask reduction",
+                f"{adaptive['Mask Reduction vs Dense (%)']:.1f} %",
+                "Adaptive vs Dense (pilot)",
+            ),
+            (
+                h2,
+                "Image AUROC",
+                f"{adaptive['Image AUROC (%)']:.1f} %",
+                "Adaptive, macro average",
+            ),
+            (
+                h3,
+                "Cached latency gain",
+                f"{latency_gain:.1f}×",
+                "Adaptive vs Dense",
+            ),
+        ]
+    for col, label, value, sub in highlights:
         col.markdown(
             f"""
         <div class='stat-card'>
@@ -540,9 +631,19 @@ with tab_bench:
         )
 
     st.markdown("<div style='height:1.2rem'></div>", unsafe_allow_html=True)
+    category_breakdown_title = (
+        "<p class='section-title'>Category breakdown &mdash; pilot subset</p>"
+        if not is_synth_bench
+        else (
+            "<p class='section-title'>Category breakdown &mdash; "
+            "all 15 MVTec classes</p>"
+        )
+    )
     st.markdown(
-        "<p class='section-title'>Category breakdown &mdash; all 15 MVTec classes</p>",
+        category_breakdown_title,
         unsafe_allow_html=True,
     )
-    cat_df, _ = load_category_auroc_breakdown()
+    cat_df, is_synth_cat = load_category_auroc_breakdown()
+    if is_synth_cat:
+        st.warning("Category values below are illustrative targets, not measurements.")
     st.dataframe(cat_df, use_container_width=True, hide_index=True)

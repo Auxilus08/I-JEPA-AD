@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import random
 from importlib import import_module
 from typing import Any
@@ -20,6 +21,9 @@ def set_seed(seed: int) -> None:
     numpy = _load_numpy()
     if numpy is not None:
         numpy.random.seed(seed)
+
+    # CuBLAS requires this setting before CUDA is initialized for deterministic matmul.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
     torch = _load_torch()
     if torch is None:

@@ -1,14 +1,33 @@
-# External GPU validation checklist (Person 1 handoff)
+# GPU validation checklist and pilot record
 
-Procedure for the machine that has the real checkpoint, the real MVTec AD dataset and a
-CUDA GPU. **Nothing in this file has been run.** Every box below is unchecked and every
-result cell is blank; a ticked box and a filled-in result are the only evidence. Do not
-copy numbers from elsewhere. For checkpoint download and the VRAM table, this checklist
-defers to [`ENCODER_VITG16_CUDA_RUNBOOK.md`](ENCODER_VITG16_CUDA_RUNBOOK.md).
+The pilot run below was completed on 2026-10-15. The unchecked boxes that follow are a
+repeat-validation checklist; they are not evidence that the recorded pilot was skipped.
+For procedure details, see [`ENCODER_VITG16_CUDA_RUNBOOK.md`](ENCODER_VITG16_CUDA_RUNBOOK.md).
 
 Run from the repository root. Linux paths shown; on Windows use `.venv\Scripts\python.exe`.
 Stop at the first failed step, record the exact error under §F, and report it; do not
 patch code on the GPU host without recording the change.
+
+## Verified pilot run
+
+| Item | Recorded result |
+| --- | --- |
+| Python / PyTorch / CUDA runtime | Python 3.12.4 / 2.2.2+cu121 / CUDA available |
+| GPU | NVIDIA RTX 4090, 24 GB |
+| NumPy / PyArrow | 1.26.4 / 18.1.0; `pip check` clean |
+| Meta I-JEPA source | `52c1ae95d05f743e000e8f10a1f3a79b10cff048` |
+| Official checkpoint | 16,534,564,553 bytes |
+| Checkpoint SHA-256 | `a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b` |
+| ViT-g/16 output | finite float32 `(N, 196, 1408)` |
+| FP16 spike peak allocation | batch 1: 1.914 GB; 4: 1.943 GB; 8: 1.980 GB; 16: 2.058 GB |
+| Real cache entries | 9 entries; 819 nominal train/validation images and 325 test images; zero failures |
+| Predictor runs | 6 (3 categories × cosine/L2), 100 epochs each |
+| Validation-only extensions | Bottle reached 300 cap; Capsule stopped at 215; Hazelnut stopped at 133/145; no extension test evaluation |
+| Test evaluation | Adaptive/fixed/dense I-JEPA on Bottle, Capsule, and Hazelnut; 100 AUPRO thresholds |
+
+See `REPRODUCIBILITY.md` for per-category test metrics, predictor validation results,
+threshold calibration, cache integrity checks, and latency scope. The available GPU
+does not establish compliance with the separate 8 GB target.
 
 ## A. Environment
 
@@ -37,11 +56,9 @@ patch code on the GPU host without recording the change.
       `compute_file_sha256(...)` from `ijepa_ad.caching.latent_cache`.
 - [ ] Key check (runbook §3): `target_encoder` is present. Record the number of
       parameters and whether keys start with `module.`.
-- [ ] Note how the checkpoint was loaded. `IJEPAEncoder._load_checkpoint` calls
-      `torch.load(path, map_location="cpu")` with torch's default `weights_only`; the
-      runbook and spike pass `weights_only=False`. On recent torch the default is `True`,
-      which may reject this checkpoint. This is a suspected, **unobserved** issue: if
-      step C fails with an unpickling error, record the message and report it.
+- [ ] Confirm the official state dictionary uses a uniform `module.` prefix. The project
+      loader strips it only when every key has it and rejects mixed-prefix dictionaries;
+      the actual checkpoint loaded strictly with this normalization.
 
 ## C. Encoder smoke test
 
@@ -157,4 +174,5 @@ for split in ("train", "val"):
 | CPU test counts on this host (pytest / ruff / black / mypy) | |
 | Known limitations or surprises | |
 
-Status of this checklist: **not executed** (as of the commit that added it).
+Status: the three-category RTX 4090 pilot is recorded above. Re-run the unchecked
+procedure when validating a different checkout, environment, GPU, or cache.

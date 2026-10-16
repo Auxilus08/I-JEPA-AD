@@ -49,3 +49,33 @@ def test_encoder_returns_196_vitg16_patch_tokens(tmp_path: Path) -> None:
     latents = encoder.encode(torch.zeros(2, 3, 224, 224))
 
     assert latents.shape == (2, 196, 1408)
+
+
+def test_encoder_loads_distributed_checkpoint_keys(tmp_path: Path) -> None:
+    model = _TinyPatchEncoder()
+    checkpoint = tmp_path / "checkpoint.pth"
+    torch.save(
+        {
+            "target_encoder": {
+                f"module.{name}": value for name, value in model.state_dict().items()
+            }
+        },
+        checkpoint,
+    )
+
+    encoder = IJEPAEncoder(checkpoint, model_factory=_TinyPatchEncoder)
+
+    assert encoder.encode(torch.zeros(1, 3, 224, 224)).shape == (1, 196, 1408)
+
+
+def test_encoder_rejects_mixed_distributed_checkpoint_keys(tmp_path: Path) -> None:
+    model = _TinyPatchEncoder()
+    state_dict = model.state_dict()
+    first_name, first_value = next(iter(state_dict.items()))
+    state_dict.pop(first_name)
+    state_dict[f"module.{first_name}"] = first_value
+    checkpoint = tmp_path / "checkpoint.pth"
+    torch.save({"target_encoder": state_dict}, checkpoint)
+
+    with pytest.raises(ValueError, match="mixes distributed and unprefixed keys"):
+        IJEPAEncoder(checkpoint, model_factory=_TinyPatchEncoder)

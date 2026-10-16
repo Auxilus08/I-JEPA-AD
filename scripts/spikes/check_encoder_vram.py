@@ -22,6 +22,8 @@ def main() -> int:
         print("PyTorch is required to run this CUDA spike.", file=sys.stderr)
         return 2
 
+    from ijepa_ad.encoder.ijepa_wrapper import _extract_target_encoder
+
     if not torch.cuda.is_available():
         print("CUDA is not available; no VRAM measurements were produced.")
         return 2
@@ -54,7 +56,7 @@ def main() -> int:
         return 3
 
     model = vit_giant(patch_size=PATCH_SIZE, img_size=[IMAGE_SIZE])
-    model.load_state_dict(checkpoint["target_encoder"], strict=True)
+    model.load_state_dict(_extract_target_encoder(checkpoint), strict=True)
     model = model.cuda().eval().half()
     print("loaded exact checkpoint key: target_encoder")
     print("forward peak memory is reported in GB using 2^30 bytes")

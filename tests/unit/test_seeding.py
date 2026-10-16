@@ -1,5 +1,6 @@
 """Tests for deterministic random state setup."""
 
+import os
 import random
 from importlib import import_module
 from typing import Any
@@ -68,6 +69,7 @@ def test_set_seed_calls_torch_and_cuda_controls(monkeypatch: Any) -> None:
             calls.append(("deterministic", enabled))
 
     calls: list[tuple[str, int | bool]] = []
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
     monkeypatch.setattr("ijepa_ad.utils.seeding._load_torch", lambda: FakeTorch)
 
     set_seed(7)
@@ -78,8 +80,18 @@ def test_set_seed_calls_torch_and_cuda_controls(monkeypatch: Any) -> None:
         ("cuda.manual_seed", 7),
         ("cuda.manual_seed_all", 7),
     ]
+    assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":4096:8"
     assert FakeTorch.backends.cudnn.deterministic is True
     assert FakeTorch.backends.cudnn.benchmark is False
+
+
+def test_set_seed_preserves_custom_cublas_workspace_config(monkeypatch: Any) -> None:
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
+    monkeypatch.setattr("ijepa_ad.utils.seeding._load_torch", lambda: None)
+
+    set_seed(7)
+
+    assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":16:8"
 
 
 def test_seeded_rng_is_reproducible_and_isolated() -> None:

@@ -1,40 +1,63 @@
 # REPRODUCIBILITY.md
 
-## Latest repository audit
+## Latest verified run
 
-Audit date: **2026-10-13**, after pulling `origin/main` to repository commit
-`621aa9c`. The working tree contains the documentation reconciliation and the
-coarse-to-fine masking/baseline implementation. With Python 3.14.7 and CPU PyTorch
-2.14.1, the full suite passes: **207 passed** across `tests/unit` and
-`tests/integration`. Ruff, Black, and mypy also pass. CUDA validation remains
-pending; the prior CUDA PyTorch installation was replaced locally with the CPU wheel
-for this verification.
+Run date: **2026-10-15**. This is the first real-model pilot record for the three
+categories available in this checkout. The dataset tree contains Bottle, Capsule, and
+Hazelnut only; the 15-category table from earlier snapshots is not evidence that the
+other categories are staged here.
 
-The pinned Meta source checkout and the 704,655,588-byte checkpoint are present
-locally, but neither real checkpoint inference nor CUDA validation has been run.
+Environment: Windows, Python 3.12.4, PyTorch 2.2.2+cu121, CUDA available, NVIDIA RTX
+4090 (24 GB), NumPy 1.26.4, and PyArrow 18.1.0. `pip check` passed. The frontend extra
+constrains PyArrow to `<19` because the current PyTorch/NumPy 1.x environment cannot use
+newer PyArrow wheels that require NumPy 2.x. The latest focused inference/evaluation/
+frontend/encoder/seeding test command passed **30 tests**; Ruff and mypy passed for the
+recently changed Python files. The full test suite has not been rerun for this run.
 
-The real MVTec tree is present and passed `python3 validate_mvtec.py
-data/raw/mvtec_ad` (`15/15` categories). The strict repository validator also
-passed `validate_category_splits` for every category; discovered counts are recorded
-below. Real image decoding and cache generation were not run in this audit.
-
-| Category | Train | Test | Nominal test | Defect test |
+| Category | Train | Test | Nominal test | Defect test / masks |
 | --- | ---: | ---: | ---: | ---: |
 | bottle | 209 | 83 | 20 | 63 |
-| cable | 224 | 150 | 58 | 92 |
 | capsule | 219 | 132 | 23 | 109 |
-| carpet | 280 | 117 | 28 | 89 |
-| grid | 264 | 78 | 21 | 57 |
 | hazelnut | 391 | 110 | 40 | 70 |
-| leather | 245 | 124 | 32 | 92 |
-| metal_nut | 220 | 115 | 22 | 93 |
-| pill | 267 | 167 | 26 | 141 |
-| screw | 320 | 160 | 41 | 119 |
-| tile | 230 | 117 | 33 | 84 |
-| toothbrush | 60 | 42 | 12 | 30 |
-| transistor | 213 | 100 | 60 | 40 |
-| wood | 247 | 79 | 19 | 60 |
-| zipper | 240 | 151 | 32 | 119 |
+
+The real ViT-g/16 encoder returned finite float32 latents of shape `(N, 196, 1408)`.
+The official I-JEPA checkout and checkpoint identity are recorded below. Nine real
+latent caches were built (train/validation/test for each category); all entries were
+finite, had the expected shape and sample order, and passed the recorded integrity/
+split checks. Six predictors (three categories × cosine/L2 objectives) were trained
+for 100 epochs, then extended using nominal validation loss only. The extension models
+are stored separately under `results/predictor_extension_200/` and
+`results/predictor_extension_300/`; the official-test metrics below still use the original
+100-epoch checkpoints.
+
+| Category | Objective | 100-epoch best loss | Extended best loss (epoch) |
+| --- | --- | ---: | ---: |
+| bottle | cosine | 0.051810 (99) | 0.033670 (290; reached 300-epoch cap) |
+| bottle | L2 | 0.089058 (98) | 0.055142 (290; reached 300-epoch cap) |
+| capsule | cosine | 0.105533 (100) | 0.095222 (190; early-stopped at 215) |
+| capsule | L2 | 0.179605 (100) | 0.160209 (190; early-stopped at 215) |
+| hazelnut | cosine | 0.182006 (100) | 0.180196 (108; early-stopped at 133) |
+| hazelnut | L2 | 0.278700 (99) | 0.276434 (120; early-stopped at 145) |
+
+The Bottle runs were still improving at epoch 290, so their convergence is not
+established. Capsule early-stopped after a validation plateau; Hazelnut's additional
+validation-loss reduction was below 1.1%. None of these extension checkpoints has been
+evaluated on official test data.
+
+The official test split was evaluated with adaptive, fixed-mask, and dense-mask I-JEPA.
+Image AUROC / pixel AUROC / AUPRO:
+
+| Category | Adaptive | Fixed | Dense |
+| --- | --- | --- | --- |
+| bottle | 0.9349 / 0.8900 / 0.6638 | 0.9349 / 0.8904 / 0.6656 | 0.8246 / 0.8843 / 0.6546 |
+| capsule | 0.4986 / 0.6939 / 0.0959 | 0.4986 / 0.6939 / 0.0959 | 0.5325 / 0.7962 / 0.2372 |
+| hazelnut | 0.6536 / 0.8774 / 0.4876 | 0.6179 / 0.8746 / 0.4880 | 0.5421 / 0.7703 / 0.3681 |
+
+AUPRO used 100 thresholds. Adaptive decision thresholds were calibrated on nominal
+validation scores, never test labels. Benchmark latency uses cached latents and excludes
+image encoding; the separate frontend inference measurement includes the resident
+encoder. PatchCore and MAE are not yet valid/implemented benchmarks. These figures
+support pilot debugging only, not full MVTec claims.
 
 ## Official I-JEPA source
 
@@ -60,8 +83,14 @@ resize (see `DECISIONS.md`, 2026-10-10). Requires Pillow (`pillow==12.3.0` in
 
 - URL: https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar
 - Local path: `checkpoints/IN22K-vit.g.16-600e.pth.tar`
+- Size: 16,534,564,553 bytes
+- SHA-256: `a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b`
 - Required state-dict key: `target_encoder`
 - Architecture: ViT-g/16, 224px input, 196 patch tokens, 1408-dimensional output
+
+The official checkpoint stores uniformly `module.`-prefixed target-encoder keys. The
+project loader strips that prefix only when every key has it and rejects mixed-prefix
+state dictionaries before strict architecture loading.
 
 ## VRAM spike
 
@@ -104,10 +133,11 @@ Latents may differ in the last float bits when the batch size changes, so record
 batch size and dtype with a run. Preprocessing compatibility: change
 `preprocess_image` output, and `PREPROCESSING_VERSION` must be bumped.
 
-Validation status: the generation path (dataset, split, preprocessing, resume, failure
-handling, invalidation) is tested on CPU with synthetic images and a mock encoder. A
-real run with the real checkpoint on a GPU, real MVTec images, and real
-`[N, 196, 1408]` latents has not been done.
+Validation status: the generation path is covered by synthetic tests and has also been
+run with the official checkpoint on CUDA for the three pilot categories. Nine real
+train/validation/test cache entries were verified: 819 nominal train/validation images
+and 325 official test images, with finite float32 `(N, 196, 1408)` latents, expected
+sample order and checkpoint/preprocessing metadata, and no cache failures.
 
 ### Cache-generation command (Phase 4)
 
@@ -139,15 +169,17 @@ configuration error. Mock caches live under `_mock` and carry encoder name
 `mock_encoder` and a checkpoint hash derived from `--seed`, so they never satisfy a real
 run's compatibility check and a different seed never reuses another projection.
 
-Validation status: the CLI and summary are tested on CPU with synthetic images and the
-mock encoder only. No real-checkpoint, GPU, or real-MVTec cache generation has been run.
+Validation status: the CLI and summary have synthetic CPU coverage and a completed
+real-checkpoint CUDA run for Bottle, Capsule, and Hazelnut. The full 15-category dataset
+has not been staged or evaluated.
 
 ## Historical CPU verification records
 
 The following Phase 5 and Phase 6 sections preserve results from earlier
 environments. They are evidence for the synthetic test coverage, not a claim that
 the current Python environment can reproduce them; the latest audit is at the top of
-this file.
+this file. Statements below describing a missing GPU run or future real training refer
+to those earlier handoffs and are superseded by the verified pilot record above.
 
 ### Phase 5 validation: reproducing the CPU test run
 
@@ -191,7 +223,7 @@ Unverified on external GPU hardware: checkpoint load and hashing, the VRAM spike
 `[N, 196, 1408]` caches, float16 vs float32 storage, real-MVTec behaviour (including
 whether any category has duplicate training images), and CI on Linux/Python 3.11.
 
-### Phase 6 handoff: CPU commands and GPU validation
+### Phase 6 handoff: CPU commands and GPU validation (historical)
 
 CPU commands (dev environment from `TRANSFER.md` §5):
 
@@ -206,17 +238,12 @@ CPU commands (dev environment from `TRANSFER.md` §5):
 What a downstream reader provides and receives: `FLOW.md`, "Downstream consumption
 contract". It is tested with a stand-in consumer, not with Person 2's code.
 
-External GPU procedure: [`docs/GPU_VALIDATION_CHECKLIST.md`](docs/GPU_VALIDATION_CHECKLIST.md)
-covers the environment, checkpoint hashing (`sha256sum` and `compute_file_sha256` must
-agree), the encoder smoke test with peak memory, real-dataset checks, a pilot cache
-(`python -m ijepa_ad.caching.cli --category bottle --device cuda --batch-size 4
---summary-json results/pilot_nominal.json`), interrupt/resume, batch-size and
-float16/float32 comparisons, and a results table. **It has not been executed.** The
-checkpoint hash, GPU memory, real-image behaviour and real cache numbers stay unknown
-until it is filled in. Suspected but unobserved: `IJEPAEncoder` loads the checkpoint with
-torch's default `weights_only`, which recent torch may reject for this file.
+The external-GPU procedure and the completed RTX 4090 pilot evidence are recorded in
+[`docs/GPU_VALIDATION_CHECKLIST.md`](docs/GPU_VALIDATION_CHECKLIST.md). Float16-vs-
+float32 storage comparisons, 8 GB target-device validation, and Linux/Python 3.11 CI
+remain unverified.
 
-## Person 2 predictor path: CPU verification and later GPU command
+## Person 2 predictor path: earlier CPU verification (historical)
 
 Verified locally on Windows/Python 3.13.2 with synthetic cached latents only:
 
@@ -228,7 +255,9 @@ Verified locally on Windows/Python 3.13.2 with synthetic cached latents only:
 ./.venv/Scripts/mypy.exe src tests
 ```
 
-Once real `train.pt` and `val.pt` latent caches exist for a category, train with:
+The following command documents the original interface; the real pilot was subsequently
+trained with `scripts/train_predictor.py`, producing checkpoints under
+`checkpoints/predictors/` and histories under `results/predictor/`:
 
 ```bash
 ./.venv/Scripts/python.exe scripts/train_predictor.py \
@@ -239,5 +268,6 @@ Once real `train.pt` and `val.pt` latent caches exist for a category, train with
   --device cuda
 ```
 
-Adjust `--batch-size`, `--hidden-dim`, `--depth`, `--num-heads`, `--mask-ratio`, and
-`--loss-type` to run ablations. This command has not been executed on real caches.
+The pilot cosine and L2 runs used 100 epochs. Best validation epochs were near the end,
+so longer training and validation-only ablations remain open work. Never select
+hyperparameters from the official test labels.

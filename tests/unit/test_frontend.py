@@ -22,6 +22,7 @@ from frontend.services.backend_interface import run_inference
 from frontend.services.experiment_service import (
     load_benchmark_summary,
     load_category_auroc_breakdown,
+    load_category_threshold,
     load_training_history,
 )
 from PIL import Image
@@ -127,17 +128,21 @@ def test_draw_detected_regions() -> None:
 def test_training_and_benchmark_services() -> None:
     """Verify training curves and benchmark summaries return valid DataFrames."""
     df_train, is_synth_train = load_training_history(category="bottle", epochs=30)
-    assert len(df_train) == 30
+    assert len(df_train) == (30 if is_synth_train else 100)
     assert "Train Loss" in df_train.columns
     assert "Val Loss" in df_train.columns
     assert isinstance(is_synth_train, bool)
 
     df_bench, is_synth_bench = load_benchmark_summary()
-    assert len(df_bench) >= 5
+    assert len(df_bench) == (5 if is_synth_bench else 3)
     assert "Image AUROC (%)" in df_bench.columns
     assert isinstance(is_synth_bench, bool)
 
     df_cat, is_synth_cat = load_category_auroc_breakdown()
-    assert len(df_cat) == 15
+    assert len(df_cat) == (15 if is_synth_cat else 3)
     assert "Category" in df_cat.columns
     assert isinstance(is_synth_cat, bool)
+
+    threshold, is_calibrated = load_category_threshold("bottle")
+    assert 0.0 <= threshold <= 1.0
+    assert isinstance(is_calibrated, bool)

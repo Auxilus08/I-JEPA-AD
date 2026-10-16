@@ -1,9 +1,10 @@
 # ViT-g/16 CUDA Reproduction Runbook
 
-This is the required procedure for the CUDA-dependent encoder validation. It is
-intentionally not run in the lightweight development container. Run it on the
-RTX 4090 machine and preserve the printed versions, checkpoint hash, and VRAM
-numbers with the experiment record.
+This is the reproducible procedure for CUDA-dependent encoder validation. The pilot
+run was completed on Windows/Python 3.12.4 with PyTorch 2.2.2+cu121 on an RTX 4090;
+recorded versions, checkpoint identity, and measured memory are in
+[`GPU_VALIDATION_CHECKLIST.md`](GPU_VALIDATION_CHECKLIST.md). Re-run it when changing
+the environment, checkpoint, or target GPU.
 
 ## 1. Create the environment
 
@@ -111,10 +112,10 @@ Record output in this table:
 
 | Batch size | Peak VRAM (GB) | Result |
 |---:|---:|---|
-| 1 |  |  |
-| 4 |  |  |
-| 8 |  |  |
-| 16 |  |  |
+| 1 | 1.914 | pass |
+| 4 | 1.943 | pass |
+| 8 | 1.980 | pass |
+| 16 | 2.058 | pass |
 
 If batch 4 or 8 exceeds approximately 6.5 GB, report that ViT-g/16 leaves
 insufficient headroom for the predictor and Stage-2 fine masking. Do not proceed to

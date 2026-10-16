@@ -1,140 +1,117 @@
 # TRANSFER.md
-_Last updated: 2026-10-14, by Person 4, on branch feature/frontend_
+_Last updated: 2026-10-15_
 
-## 1. One-paragraph project state
-The repository is on `feature/frontend` and Person 4's Frontend and Experiment
-Visualization implementation is complete and verified. The user-facing Streamlit
-application (`frontend/app.py`), backend application interface (`frontend/services/`),
-heatmap/overlay rendering components (`frontend/components/`), and experiment log
-visualization services are implemented. The stable `run_inference(image, method, category)`
-API conforms strictly to the contract defined on Page 5 & 8 of the design specification,
-supporting both real engine connections and contract-compliant synthetic mock execution
-when GPU checkpoints are not mounted. 7 unit tests covering contract schema, input
-validation, mask count reduction invariants, and overlay generation pass.
+## 1. Current project state
+
+The three-category MVTec pilot has completed its first real-model pass: the official
+I-JEPA ViT-g/16 checkpoint was loaded on CUDA, real train/validation/test latent caches
+were built, six cosine/L2 predictors were trained, and adaptive/fixed/dense I-JEPA
+inference was evaluated on the official test splits. The Streamlit dashboard now uses
+real inference by default and reads the measured pilot results. These are pilot results,
+not full-benchmark claims.
+
+The environment used was Python 3.12.4, PyTorch 2.2.2+cu121, NumPy 1.26.4, and PyArrow
+18.1.0 on an RTX 4090 with 24 GB VRAM. CUDA was available, `pip check` passed, and the
+frontend constrains PyArrow to `<19` because newer wheels require NumPy 2.x, which is
+incompatible with the pinned PyTorch 2.2 environment.
 
 ## 2. Phase checklist
-- **Weeks 1-2, Foundations:** DONE for scaffold, utilities, MVTec metadata discovery,
-  deterministic splitting, preprocessing, and tests. Hydra config loading is not wired.
-- **Weeks 3-4, Encoder & Caching:** IN PROGRESS. Mock-tested wrapper/cache/CLI exist;
-  real checkpoint load, GPU VRAM spike, and real latent cache generation remain open.
-- **Weeks 5-6, Predictor:** DONE for code and CPU synthetic verification. Left for GPU
-  time: run training on real pilot-category caches and inspect loss curves/checkpoints.
-- **Weeks 7-8, Baselines:** DONE for fixed-mask, dense-mask, PatchCore-style, and
-  MAE-reconstruction CPU interfaces; real benchmark execution remains open.
-- **Weeks 9-10, Adaptive Masking Engine:** DONE for 14×14 coordinate mapping,
-  coarse/fine gating, adaptive-vs-dense counting, score fusion, and heatmaps; real
-  predictor/encoder integration remains open.
-- **Weeks 11-12, Frontend & Visualization (Person 4):** DONE for Streamlit demo
-  dashboard, backend application contract, heatmap/overlay visualizers, loss curves,
-  and benchmark comparisons.
-- **Weeks 13-14, Full Dataset & Ablations:** NOT STARTED.
-- **Weeks 15-16, Paper Assets:** NOT STARTED.
 
-## 3. What is verified working right now
- Full CPU suite: `python -m pytest tests/unit tests/integration -q` passed: **207
-  passed** on Python 3.14.7 with CPU PyTorch 2.14.1.
-- Quality gates passed: `ruff check .`, `black --check --workers 1 .`, and
-  `mypy src tests`.
-- Person 2 cache dataset tests pass: cache order/shape, id-ordered selection, optional
-  annotation joins, missing and duplicate annotation failures, collate ordering, and
-  empty/mixed-split collate failures.
-- Predictor tests pass: hand-computed cosine/L2 loss checks, predictor output shape and
-  input validation, deterministic random target mask behavior, and synthetic cached
-  training that reduces validation loss and saves a checkpoint.
-- Existing Person 2 contract test still passes:
-  `tests/integration/test_person2_cache_consumer.py` has 13 passing tests over
-  synthetic data and the deterministic mock encoder.
-Verified locally on Python 3.14.7, torch 2.14.1+cpu, with synthetic data and no
-real encoder or CUDA execution:
-- Masking/baseline implementation: focused suite **9 passed**; complete suite **207
-  passed**.
-- PR review fixes (2026-10-12, see `DECISIONS.md`): `pytest tests/unit tests/integration`: **168 passed**; `ruff check .`: all checks passed; `black --check --workers 1 .`: 38 files unchanged; `mypy src tests`: no issues in 35 source files. All CPU, mock encoder, synthetic data; no real encoder, GPU or MVTec involved.
-- Phase 6 re-run: `pytest tests/unit tests/integration`: **150 passed** (137 + 13 new in `tests/integration/test_person2_cache_consumer.py`). `ruff check .`: all checks passed. `black --check --workers 1 .`: 38 files unchanged. `mypy src tests`: no issues in 35 source files. No source file changed in Phase 6.
-- **Consuming the cache (Person 2):** see `FLOW.md`, "Downstream consumption contract". In short: `load_latent_cache(latent_cache_path(root, category, split), CacheExpectations(...))` returns a `LatentCache`; `.latents` is `[N, 196, 1408]`, `.get(image_id)` is one sample `[196, 1408]`, `.select(ids)` a batch, `.metadata.sample_ids` the row order; labels and masks are not cached. The 13 Phase 6 tests exercise this with a stand-in consumer, and the implemented `predictor/` dataset, losses, predictor, training loop, and CLI now consume that contract. Real GPU training and real-cache integration remain **unverified**.
-- Earlier verified state (Phase 5): 137 passed, 37 files black-clean, mypy 34 files.
-- Phase 5 (`tests/integration/test_pipeline_end_to_end.py`, 18 tests, plus 1 in `tests/unit/test_mvtec_dataset.py`) exercised these paths: dataset discovery → split → preprocessing → spy mock encoder → cache → reload (every latent compared with the mock encoder run on that sample's own image); a second run encodes nothing; split membership is identical for the same pixels under different filenames/orders; a within-train duplicate and a train/test copy are rejected before any encoding; an existing valid cache does not bypass a later-invalid dataset; global `random`/torch RNG state and source-file bytes/mtimes are unchanged by a full run; `train.pt` copied to `val.pt` or to another category is rejected and rebuilt; a shard copied under another sample's name is recomputed; a failed `os.replace` leaves no final entry and no temp file, and resume encodes only the missing rows; a truncated final entry is reported and left untouched; a checksum-failing tensor is rejected; reordered `sample_ids` in a self-consistent file are not trusted (rebuilt); NaN encoder output is a reported failure with nothing saved from that batch; a changed embedding dim or split seed rebuilds; two runs give bit-identical latents (same batch size) and batch size 1 vs 12 agrees within `atol=1e-4`.
-- Defects found and fixed (regression test first, see `DECISIONS.md`): (1) `MVTecADDataset(split="val")` silently read `test/`; it now raises `ValueError`. (2) Non-finite encoder output escaped the CLI as a raw `CacheMetadataError` traceback; it is now a `CacheBuildError` raised before any shard of the batch is saved.
-- Earlier phases (counts unchanged except MVTec dataset 9 → 10): cache unit tests 40, builder integration 16, CLI 11, transforms 16, splits 12, seeding 6, wrapper 2, logging 2, profiling 2, scaffold 1, `test_data_pipeline.py` 1.
-- Preprocessing constants were checked against Meta's `src/transforms.py` at the pinned commit `52c1ae95` (see `REPRODUCIBILITY.md`).
-- Real MVTec: `data/` does not exist on this machine, so the optional real-image smoke test was **not run**. Real checkpoint inference was **not performed**; the checkpoint was not downloaded or hashed.
+- **Pilot data and environment:** DONE. Bottle, Capsule, and Hazelnut are staged at
+  `data/raw/mvtec_ad`; originals were preserved. Category-level split validation passed.
+- **Encoder and caches:** DONE for the pilot. Meta I-JEPA is pinned at
+  `52c1ae95d05f743e000e8f10a1f3a79b10cff048`; the official checkpoint is
+  16,534,564,553 bytes, SHA-256
+  `a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b`.
+  Real ViT-g/16 inference and all nine train/validation/test cache entries were verified.
+- **Predictor:** DONE for the initial pilot. Six 100-epoch runs were extended using only
+  nominal validation loss: all six to a 200-epoch cap, then Bottle and Capsule to 300.
+  Bottle still improved through epoch 290; its cosine/L2 runs are not yet converged.
+- **Inference and metrics:** DONE for the three I-JEPA schedules. Real masked-latent
+  scoring, image/pixel AUROC, and AUPRO are implemented and exercised. The evaluation
+  used 100 AUPRO thresholds and calibrated decision thresholds from nominal validation
+  scores only.
+- **Dashboard:** DONE for pilot integration. Real mode is the default; mock mode requires
+  explicit selection. Measured benchmark tables render. A compatible frontend dependency
+  range is recorded in `pyproject.toml`.
+- **Full benchmark and comparisons:** NOT DONE. Only 3 of 15 categories are available;
+  PatchCore and MAE are not implemented as valid comparable baselines. Ablations,
+  multi-seed uncertainty/statistical analysis, and paper assets remain outstanding.
+- **Target hardware:** NOT DONE. Only the RTX 4090 (24 GB) was tested; no RTX 4060/8 GB
+  compliance claim is supported.
 
-Not verified: real MVTec images, the real checkpoint (including hashing it), any GPU run, the CLI with `IJEPAEncoder`, a real cache for any category, CI on Linux/Python 3.11, atomic-write behavior under a real power loss, and a numeric cross-check against torchvision (not installed).
+## 3. Pilot evidence
 
-## 4. What is NOT done yet (explicit, so it isn't assumed)
-- No real MVTec dataset in `data/`; no real latent caches.
-- No real I-JEPA checkpoint or official repo checkout in `checkpoints/` / `external/`.
-- No GPU run, VRAM spike, real checkpoint hash verification, or real predictor training.
-- No masking engine, fusion, baselines, metrics, efficiency logging, benchmark suite,
-  ablation sweep, or paper asset generation.
-- Cache production dtype is still whatever the encoder returns; float16 vs float32 is
-  not decided.
-- `configs/*.yaml` are documentation-like defaults only; no Hydra/OmegaConf loading.
+Dataset counts:
 
-## 5. Environment & reproduction
-Current local environment:
+| Category | Train | Test | Nominal test | Defect test / masks |
+| --- | ---: | ---: | ---: | ---: |
+| bottle | 209 | 83 | 20 | 63 |
+| capsule | 219 | 132 | 23 | 109 |
+| hazelnut | 391 | 110 | 40 | 70 |
+
+Image AUROC / pixel AUROC / AUPRO on the official test split:
+
+| Category | Adaptive | Fixed | Dense |
+| --- | --- | --- | --- |
+| bottle | 0.9349 / 0.8900 / 0.6638 | 0.9349 / 0.8904 / 0.6656 | 0.8246 / 0.8843 / 0.6546 |
+| capsule | 0.4986 / 0.6939 / 0.0959 | 0.4986 / 0.6939 / 0.0959 | 0.5325 / 0.7962 / 0.2372 |
+| hazelnut | 0.6536 / 0.8774 / 0.4876 | 0.6179 / 0.8746 / 0.4880 | 0.5421 / 0.7703 / 0.3681 |
+
+Adaptive evaluated an average of 16.39, 16.00, and 17.60 masks per image for Bottle,
+Capsule, and Hazelnut, respectively, versus 196 for dense. The benchmark UI reports
+macro-average measured pilot values. Its latency is cached-latent predictor scoring
+only and excludes image encoding; end-to-end UI inference includes the encoder. Do not
+use these test results to tune thresholds or hyperparameters.
+
+Validation-calibrated adaptive decision thresholds (target 5% nominal validation FPR):
+Bottle `0.31648`, Capsule `0.41187`, Hazelnut `0.44221`. The observed validation rates
+were 1/21, 1/22, and 1/39. Threshold comparisons use strict `score > threshold`.
+
+Validation-only training extensions used seed 0 and patience 25. The official-test
+benchmarks above still use the original 100-epoch checkpoints; the extension checkpoints
+are isolated under `results/predictor_extension_200/` and
+`results/predictor_extension_300/` and were not evaluated on the test split.
+
+| Category | Objective | Best at 100 | Best extended | Extended run |
+| --- | --- | ---: | ---: | --- |
+| bottle | cosine | 0.051810 (epoch 99) | 0.033670 (epoch 290) | 300 epochs |
+| bottle | L2 | 0.089058 (epoch 98) | 0.055142 (epoch 290) | 300 epochs |
+| capsule | cosine | 0.105533 (epoch 100) | 0.095222 (epoch 190) | stopped at 215 |
+| capsule | L2 | 0.179605 (epoch 100) | 0.160209 (epoch 190) | stopped at 215 |
+| hazelnut | cosine | 0.182006 (epoch 100) | 0.180196 (epoch 108) | stopped at 133 |
+| hazelnut | L2 | 0.278700 (epoch 99) | 0.276434 (epoch 120) | stopped at 145 |
+
+## 4. Reproduction and verification
+
+Run commands from the `I-JEPA-AD` project root. On this Windows machine, use
+`.venv\Scripts\python.exe`.
+
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pytest tests\unit\test_inference.py tests\unit\test_evaluation_metrics.py tests\unit\test_frontend.py tests\unit\test_ijepa_wrapper.py tests\unit\test_seeding.py -q
 .\.venv\Scripts\ruff.exe check .
-.\.venv\Scripts\black.exe --check --workers 1 .
 .\.venv\Scripts\mypy.exe src tests
-.\.venv\Scripts\python.exe -m pytest tests\unit tests\integration
+.\.venv\Scripts\python.exe scripts\evaluate_pilot.py --help
+.\.venv\Scripts\python.exe -m streamlit run frontend\app.py
 ```
 
-Focused Person 2 verification:
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests\unit\test_predictor_cache_dataset.py tests\unit\test_predictor_losses.py tests\unit\test_transformer_predictor.py tests\integration\test_predictor_training.py tests\integration\test_person2_cache_consumer.py -q
-```
+The latest focused verification passed 30 tests; Ruff and mypy passed for the recently
+changed inference, evaluation, and frontend files. The complete test suite has not yet
+been rerun on this environment. Real encoder smoke test, cache counts, training losses,
+metrics, and environment details are recorded in `REPRODUCIBILITY.md` and
+`docs/GPU_VALIDATION_CHECKLIST.md`.
 
-Later, after real caches exist, train one category with:
-```powershell
-.\.venv\Scripts\python.exe scripts\train_predictor.py `
-  --cache-root data/cache/latents `
-  --category bottle `
-  --checkpoint-sha256 <real_checkpoint_sha256_from_cache_summary> `
-  --output results/predictor/bottle.pt `
-  --device cuda
-```
+## 5. Remaining implementation sequence
 
-Local-only state: `.venv/`. No `data/`, `checkpoints/`, or real cache artifacts exist
-in this workspace.
-
-## 6. Known issues / open threads
-- Git commands need `git -c safe.directory='C:/Users/Hp/Desktop/New folder' ...` in this
-  sandbox because repository ownership differs from the sandbox user.
-- Python here is 3.13.2, while `pyproject.toml` targets Python >=3.11 and mypy is
-  configured with `python_version = "3.11"`. Full CPU tests and mypy pass now.
-- The training loop intentionally uses a small internal batching iterator instead of
-  `torch.utils.data.DataLoader`; importing DataLoader caused mypy to parse NumPy stubs
-  that are incompatible with the configured Python target in this environment.
-- Real data/checkpoint/GPU behavior remains unverified.
-- A tracked `.validate_mvtec.py.swp` file exists in the repo history and was not touched.
-- **mypy and numpy on Python 3.12:** numpy 2.5.x stubs use 3.12-only `type` syntax, which mypy rejects with `python_version = "3.11"` once any checked module imports numpy directly. Cache and CLI modules avoid importing numpy directly.
-- **mypy and pytest:** with `follow_imports = "skip"`, `@pytest.mark.parametrize` is reported as an untyped decorator under `strict`, so tests use plain loops instead.
-- **Hardware:** `docs/PRD.md` targets an RTX 4060 (8 GB), while the runbook targets an RTX 4090. The user does not plan to use their local GPU for full ViT-g/16 inference. VRAM results decide whether to keep ViT-g/16 or fall back to ViT-H/14.
-- **Stale configs:** `configs/encoder/vitb16.yaml` and `vitl16.yaml` remain from the pre-ViT-g plan.
-- **Stray file:** `.validate_mvtec.py.swp`, a vim swap file, is tracked in git and should be untracked.
-- **Wrong filename references:** `DECISIONS.md` and `FLOW.md` headers reference `CLAUDE.md`, but the governing file is `AGENT.md`.
-- **Tracked swap file:** `.validate_mvtec.py.swp` is still tracked (pre-existing); Phase 5 did not touch it.
-- **Dataset duplicates stop a category:** identical bytes inside `train/good` raise `DatasetValidationError` (no dedup). By design; unverified against real MVTec.
-- **Other exception types:** an exception other than `CacheError`/`DatasetValidationError`/`FileNotFoundError` (e.g. Pillow's `DecompressionBombError` on a huge image) still propagates from the CLI as a traceback (an `Exception` from the encoder no longer does: it fails its batch and is summarized); finished shards are kept and a rerun resumes.
-- **Loader leniency:** a mask under `ground_truth/good/` and orphan masks with no matching image are ignored, not rejected.
-- **Checkpoint hash cost:** `compute_file_sha256` reads the whole multi-GB checkpoint; the CLI does it once per run.
-- **Sample ids and corrupt images:** an id is the SHA-256 of file content, so replacing an image's bytes changes its id; a run re-discovers files each time.
-
-## 7. Where to look for more detail
-- Person 2 dataset: `src/ijepa_ad/predictor/cache_dataset.py`.
-- Losses: `src/ijepa_ad/predictor/losses.py`.
-- Predictor model: `src/ijepa_ad/predictor/transformer_predictor.py`.
-- Training loop/CLI: `src/ijepa_ad/predictor/training.py` and `scripts/train_predictor.py`.
-- Tests: `tests/unit/test_predictor_cache_dataset.py`,
-  `tests/unit/test_predictor_losses.py`, `tests/unit/test_transformer_predictor.py`,
-  `tests/integration/test_predictor_training.py`, and
-  `tests/integration/test_person2_cache_consumer.py`.
-- Design and runtime flow: `FLOW.md` sections 1-3.
-- Rationale: `DECISIONS.md`, 2026-10-11 entries for Person 2.
-
-## 8. Immediate next step
-When GPU access is available, generate real pilot latent caches (`bottle`, `capsule`,
-`hazelnut`) with the real I-JEPA encoder, then run `scripts/train_predictor.py` for each
-pilot category and save the loss curves/checkpoints under `results/`.
+1. Decide whether to extend Bottle training beyond 300 epochs; its best validation loss
+   was still at epoch 290. Keep the test split isolated until the selection rule is fixed.
+2. Obtain the other 12 MVTec categories; stage and validate them without altering source
+   copies.
+3. Implement reproducible PatchCore and MAE comparators with equivalent preprocessing,
+   splits, and evaluation; otherwise keep comparison claims explicitly scoped to I-JEPA
+   schedules.
+4. Run the frozen protocol across all 15 categories, repeat selected experiments across
+   seeds, and report uncertainty/statistical tests plus full encoder-inclusive latency
+   and memory.
+5. Validate the intended 8 GB device separately, generate paper assets from machine-
+   readable results, then update the claims and protocol documentation.

@@ -12,18 +12,33 @@ Provides:
 
 from __future__ import annotations
 
-import importlib.util
 import time
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import torch
 from PIL import Image
 
-PYTORCH_AVAILABLE = (
-    importlib.util.find_spec("torch") is not None
-    and importlib.util.find_spec("ijepa_ad") is not None
+from ijepa_ad.caching.cache_schema import is_safe_name
+from ijepa_ad.caching.latent_cache import compute_file_sha256
+from ijepa_ad.data.transforms import preprocess_image
+from ijepa_ad.encoder.ijepa_wrapper import IJEPAEncoder
+from ijepa_ad.inference import (
+    InferenceMode,
+    MaskedLatentScorer,
+    load_masking_settings,
+    load_predictor_checkpoint,
 )
+from ijepa_ad.predictor.transformer_predictor import LatentTransformerPredictor
+
+PYTORCH_AVAILABLE = True
+REAL_METHODS: dict[str, InferenceMode] = {
+    "adaptive_ijepa": "adaptive",
+    "dense_masked_ijepa": "dense",
+    "fixed_mask_ijepa": "fixed",
+}
 
 
 def _validate_image_input(image: Any) -> Image.Image:
@@ -83,11 +98,18 @@ def _generate_mock_inference(
     calibrated_heat = np.clip(raw_heat * multiplier, 0.0, 1.0).astype(np.float32)
 
     image_score = float(np.percentile(calibrated_heat, 99.0))
-    is_anomalous = image_score >= anomaly_threshold
+    is_anomalous = image_score > anomaly_threshold
 
     # Mask counts per method specification
     mask_counts = {
         "adaptive_ijepa": 14,
+        "dense_masked_ijepa": 196,
+        "fixed_mask_ijepa": 16,
+        "patchcore": 0,
+        "mae_reconstruction": 1,
+    }
+    total_regions = {
+        "adaptive_ijepa": 212,
         "dense_masked_ijepa": 196,
         "fixed_mask_ijepa": 16,
         "patchcore": 0,
@@ -119,6 +141,7 @@ def _generate_mock_inference(
         "overlay": None,
         "detected_regions": detected_regions,
         "mask_count": mask_counts.get(method, 14),
+        "total_regions": total_regions.get(method, 212),
         "latency_ms": round(latency_ms, 2),
         "peak_vram_mb": 312.4,
         "method": method,
@@ -128,14 +151,129 @@ def _generate_mock_inference(
     }
 
 
-def _check_checkpoint_available(category: str | None) -> bool:
-    """Check if predictor checkpoint exists for the given category."""
-    root = Path(__file__).resolve().parent.parent.parent
-    ckpt_dir = root / "results" / "predictor"
-    if category:
-        if (ckpt_dir / f"{category}.pt").is_file():
-            return True
-    return any(ckpt_dir.glob("*.pt")) if ckpt_dir.is_dir() else False
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+@lru_cache(maxsize=1)
+def _checkpoint_sha256(root: str) -> str:
+    return str(
+        compute_file_sha256(Path(root) / "checkpoints" / "IN22K-vit.g.16-600e.pth.tar")
+    )
+
+
+@lru_cache(maxsize=1)
+def _load_encoder(root: str, device_name: str) -> IJEPAEncoder:
+    project = Path(root)
+    checkpoint = project / "checkpoints" / "IN22K-vit.g.16-600e.pth.tar"
+    official_repo = project / "external" / "ijepa"
+    return IJEPAEncoder(
+        checkpoint,
+        official_repo_path=official_repo,
+        device=device_name,
+    )
+
+
+@lru_cache(maxsize=3)
+def _load_predictor(
+    root: str, category: str, device_name: str
+) -> LatentTransformerPredictor:
+    if not is_safe_name(category):
+        raise ValueError(f"invalid MVTec category: {category!r}")
+    path = Path(root) / "checkpoints" / "predictors" / f"{category}_cosine.pt"
+    if not path.is_file():
+        raise FileNotFoundError(f"trained cosine predictor not found: {path}")
+    return load_predictor_checkpoint(
+        path,
+        category=category,
+        encoder_sha256=_checkpoint_sha256(root),
+        device=device_name,
+    )
+
+
+def _detected_regions(
+    heatmap: np.ndarray[Any, Any],
+    image_size: tuple[int, int],
+    image_score: float,
+    anomaly_threshold: float,
+    category: str,
+) -> list[dict[str, Any]]:
+    if image_score <= anomaly_threshold or float(heatmap.max()) == float(heatmap.min()):
+        return []
+    cutoff = float(np.quantile(heatmap, 0.95))
+    rows, columns = np.where(heatmap >= cutoff)
+    width, height = image_size
+    scale_x, scale_y = width / heatmap.shape[1], height / heatmap.shape[0]
+    box = [
+        max(0, int(columns.min() * scale_x)),
+        max(0, int(rows.min() * scale_y)),
+        min(width, int((columns.max() + 1) * scale_x)),
+        min(height, int((rows.max() + 1) * scale_y)),
+    ]
+    return [
+        {
+            "box": box,
+            "confidence": round(image_score, 3),
+            "label": f"Anomaly ({category})",
+        }
+    ]
+
+
+def _run_real_inference(
+    image: Image.Image,
+    method: str,
+    category: str | None,
+    anomaly_threshold: float,
+) -> dict[str, Any]:
+    if category is None:
+        raise ValueError("category is required for real I-JEPA inference")
+    if method not in REAL_METHODS:
+        raise NotImplementedError(f"real inference is not implemented for {method!r}")
+    if not is_safe_name(category):
+        raise ValueError(f"invalid MVTec category: {category!r}")
+
+    root = _project_root()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    encoder = _load_encoder(str(root), str(device))
+    predictor = _load_predictor(str(root), category, str(device))
+    image_tensor = preprocess_image(image).unsqueeze(0).to(device)
+
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+        torch.cuda.reset_peak_memory_stats(device)
+    start_time = time.perf_counter()
+    latents = encoder.encode(image_tensor)
+    masking_settings = load_masking_settings(
+        root / "configs" / "masking" / "coarse_to_fine.yaml"
+    )
+    scores = MaskedLatentScorer(predictor, **masking_settings).score(
+        latents, mode=REAL_METHODS[method]
+    )
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+        peak_vram_mb = torch.cuda.max_memory_allocated(device) / (1024**2)
+    else:
+        peak_vram_mb = None
+
+    latency_ms = (time.perf_counter() - start_time) * 1000.0
+    heatmap = scores.heatmap[0, 0].detach().cpu().numpy().astype(np.float32)
+    image_score = scores.image_score
+    return {
+        "image_score": image_score,
+        "pixel_heatmap": heatmap,
+        "overlay": None,
+        "detected_regions": _detected_regions(
+            heatmap, image.size, image_score, anomaly_threshold, category
+        ),
+        "mask_count": scores.evaluated_regions,
+        "total_regions": scores.total_regions,
+        "latency_ms": latency_ms,
+        "peak_vram_mb": peak_vram_mb,
+        "method": method,
+        "category": category,
+        "is_mock": False,
+        "status": "real",
+    }
 
 
 def run_inference(
@@ -145,67 +283,15 @@ def run_inference(
     use_mock: bool = False,
     anomaly_threshold: float = 0.50,
 ) -> dict[str, Any]:
-    """Execute anomaly detection inference on an input image.
-
-    Args:
-        image: PIL Image or path to image.
-        method: Anomaly detection method ('adaptive_ijepa', 'dense_masked_ijepa', etc.).
-        category: MVTec category (e.g. 'bottle', 'screw').
-        use_mock: Force synthetic mock response.
-        anomaly_threshold: Threshold to flag anomalous regions.
-
-    Returns:
-        Contract dictionary adhering to Page 8 specification.
-    """
+    """Run actual inference unless a synthetic response is explicitly requested."""
     validated_img = _validate_image_input(image)
-
-    # If mock explicitly requested or PyTorch is not available:
-    if use_mock or not PYTORCH_AVAILABLE:
+    if not 0.0 <= anomaly_threshold <= 1.0:
+        raise ValueError("anomaly_threshold must be in [0, 1]")
+    if use_mock:
         return _generate_mock_inference(
             validated_img,
             method=method,
             category=category,
             anomaly_threshold=anomaly_threshold,
         )
-
-    # Check if real checkpoint exists in the repository
-    has_real_checkpoint = _check_checkpoint_available(category)
-
-    if not has_real_checkpoint:
-        # Checkpoint is pending; return mock output explicitly marked as is_mock: True
-        res = _generate_mock_inference(
-            validated_img,
-            method=method,
-            category=category,
-            anomaly_threshold=anomaly_threshold,
-        )
-        res["backend_warning"] = (
-            "No trained predictor checkpoint found under results/predictor/. "
-            "Returning contract-compliant simulation."
-        )
-        res["is_mock"] = True
-        return res
-
-    # Real checkpoint exists: attempt real inference pipeline
-    try:
-        # Load and run real pipeline
-        # For now, if full pipeline cannot run without GPU/cache, fall back safely
-        res = _generate_mock_inference(
-            validated_img,
-            method=method,
-            category=category,
-            anomaly_threshold=anomaly_threshold,
-        )
-        res["is_mock"] = True
-        return res
-
-    except Exception as exc:
-        fallback = _generate_mock_inference(
-            validated_img,
-            method=method,
-            category=category,
-            anomaly_threshold=anomaly_threshold,
-        )
-        fallback["backend_warning"] = f"Backend fallback due to: {exc}"
-        fallback["is_mock"] = True
-        return fallback
+    return _run_real_inference(validated_img, method, category, anomaly_threshold)
