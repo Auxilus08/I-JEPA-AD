@@ -79,8 +79,10 @@ def aupro(
     maximum = max(float(score.max()) for score in score_arrays)
     epsilon = max(float(np.finfo(np.float64).eps), (maximum - minimum) * 1e-9)
     thresholds = np.linspace(maximum + epsilon, minimum - epsilon, num_thresholds)
-    false_positive_rates = np.empty(num_thresholds, dtype=np.float64)
-    region_overlaps = np.empty(num_thresholds, dtype=np.float64)
+    false_positive_rates: NDArray[np.float64] = np.empty(
+        num_thresholds, dtype=np.float64
+    )
+    region_overlaps: NDArray[np.float64] = np.empty(num_thresholds, dtype=np.float64)
 
     flat_scores = [score.reshape(-1) for score in score_arrays]
     flat_masks = [mask.reshape(-1) for mask in mask_arrays]
@@ -117,7 +119,7 @@ def aupro(
         fpr_curve = np.append(fpr_curve, max_fpr)
         pro_curve = np.append(pro_curve, crossing_pro)
 
-    return float(np.trapz(pro_curve, fpr_curve) / max_fpr)
+    return float(np.trapezoid(pro_curve, fpr_curve) / max_fpr)
 
 
 def binary_auroc(labels: Sequence[int], scores: Sequence[float]) -> float:
