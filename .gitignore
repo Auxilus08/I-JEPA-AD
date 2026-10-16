@@ -11,3 +11,4 @@ results/*
 /data/
 checkpoints/
 external/ijepa
+dataset/
