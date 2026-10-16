@@ -13,11 +13,9 @@ from frontend.config import load_frontend_config
 from frontend.services.backend_interface import (
     PYTORCH_AVAILABLE,
     REAL_METHODS,
-    detected_regions_for_threshold,
     run_inference,
 )
 from frontend.services.experiment_service import (
-    benchmark_efficiency_highlights,
     load_benchmark_summary,
     load_category_auroc_breakdown,
     load_category_threshold,
@@ -251,38 +249,18 @@ with st.sidebar:
             mode=REAL_METHODS[selected_method],
             default=configured_threshold,
         )
-    threshold_context = (selected_category, selected_method, force_mock)
-    if st.session_state.get("_threshold_context") != threshold_context:
-        st.session_state["decision_threshold"] = anomaly_threshold_default
-        st.session_state["_threshold_context"] = threshold_context
-    elif "decision_threshold" not in st.session_state:
-        st.session_state["decision_threshold"] = anomaly_threshold_default
-
-    if st.button(
-        "Reset to calibrated default" if threshold_is_calibrated else "Reset threshold",
-        key="reset_decision_threshold",
-    ):
-        st.session_state["decision_threshold"] = anomaly_threshold_default
-    anomaly_threshold = st.number_input(
+    anomaly_threshold = st.slider(
         "Decision Threshold",
-        min_value=0.0,
-        max_value=1.0,
-        step=0.001,
-        format="%.8f",
-        key="decision_threshold",
+        0.0,
+        1.0,
+        anomaly_threshold_default,
+        0.01,
     )
     if threshold_is_calibrated:
-        if anomaly_threshold == anomaly_threshold_default:
-            st.caption(
-                f"Validation-calibrated default: {anomaly_threshold_default:.8f}."
-            )
-        else:
-            st.caption(
-                f"User-adjusted from validation-calibrated default "
-                f"{anomaly_threshold_default:.8f}."
-            )
-    else:
-        st.caption("No validation-calibrated threshold is available for this mode.")
+        st.caption(
+            "Threshold calibrated using nominal validation data for the selected "
+            "category and method."
+        )
     overlay_alpha = st.slider(
         "Overlay Opacity",
         0.10,
@@ -429,14 +407,6 @@ with tab_infer:
                     st.session_state["inspection_result"] = None
                     st.error(f"Inference failed: {error}")
                 else:
-                    result["input_context"] = {
-                        "category": selected_category,
-                        "method": selected_method,
-                        "mode": (
-                            "mock" if force_mock else REAL_METHODS[selected_method]
-                        ),
-                        "source": input_mode,
-                    }
                     st.session_state["inspection_result"] = result
                     st.session_state["inspected_image"] = sample_image
 
@@ -445,22 +415,6 @@ with tab_infer:
 
         current_result = st.session_state.get("inspection_result")
         current_img = st.session_state.get("inspected_image")
-        requested_context = {
-            "category": selected_category,
-            "method": selected_method,
-            "mode": "mock" if force_mock else REAL_METHODS[selected_method],
-            "source": input_mode,
-        }
-        if (
-            current_result is not None
-            and current_result.get("input_context") != requested_context
-        ):
-            st.warning(
-                "These results are stale because the selected category, method, "
-                "inference mode, or input source changed. Run Detection again."
-            )
-            current_result = None
-            current_img = None
 
         if current_result is not None and current_img is not None:
             score = float(current_result["image_score"])
@@ -520,16 +474,11 @@ with tab_infer:
                     unsafe_allow_html=True,
                 )
 
-            # Recompute threshold-dependent regions from the stored heatmap.
+            # Consistent region filtering (Fix Issue 6)
+            regions = current_result.get("detected_regions", []) if is_anomalous else []
+
             # Visualizations
             heatmap = current_result["pixel_heatmap"]
-            regions = detected_regions_for_threshold(
-                np.asarray(heatmap),
-                current_img.size,
-                score,
-                anomaly_threshold,
-                selected_category,
-            )
             overlay = create_heatmap_overlay(
                 current_img,
                 heatmap,
@@ -639,13 +588,37 @@ with tab_bench:
     h1, h2, h3 = st.columns(3)
     if is_synth_bench:
         highlights = [
-            ("Mask reduction", "92.9 %", "Illustrative target"),
-            ("Image AUROC", "98.4 %", "Illustrative target"),
-            ("Latency gain", "5.1×", "Illustrative target"),
+            (h1, "Mask reduction", "92.9 %", "Illustrative target"),
+            (h2, "Image AUROC", "98.4 %", "Illustrative target"),
+            (h3, "Latency gain", "5.1×", "Illustrative target"),
         ]
     else:
-        highlights = benchmark_efficiency_highlights(bench_df)
-    for col, (label, value, sub) in zip((h1, h2, h3), highlights, strict=True):
+        adaptive = bench_df.loc[bench_df["Method"] == "Adaptive I-JEPA"].iloc[0]
+        dense = bench_df.loc[bench_df["Method"] == "Dense-mask I-JEPA"].iloc[0]
+        latency_gain = (
+            dense["Cached-latent Latency (ms)"] / adaptive["Cached-latent Latency (ms)"]
+        )
+        highlights = [
+            (
+                h1,
+                "Mask reduction",
+                f"{adaptive['Mask Reduction vs Dense (%)']:.1f} %",
+                "Adaptive vs Dense (pilot)",
+            ),
+            (
+                h2,
+                "Image AUROC",
+                f"{adaptive['Image AUROC (%)']:.1f} %",
+                "Adaptive, macro average",
+            ),
+            (
+                h3,
+                "Cached latency gain",
+                f"{latency_gain:.1f}×",
+                "Adaptive vs Dense",
+            ),
+        ]
+    for col, label, value, sub in highlights:
         col.markdown(
             f"""
         <div class='stat-card'>

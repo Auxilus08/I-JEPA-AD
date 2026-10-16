@@ -33,22 +33,6 @@ python -m streamlit run frontend/app.py
 Real image inference requires the local I-JEPA checkpoint and a trained predictor.
 Synthetic mock mode must be selected explicitly in the UI.
 
-The Benchmarks tab uses illustrative target values until measured pilot result
-files exist. To populate its measured results, first prepare the MVTec dataset,
-latent caches, predictor checkpoints, and encoder checkpoint described in
-[`REPRODUCIBILITY.md`](REPRODUCIBILITY.md), then run these commands from the
-repository root before launching the dashboard:
-
-```bash
-python scripts/evaluate_pilot.py --mode adaptive --output results/benchmarks/pilot_adaptive.json
-python scripts/evaluate_pilot.py --mode dense --output results/benchmarks/pilot_dense.json
-python scripts/evaluate_pilot.py --mode fixed --output results/benchmarks/pilot_fixed.json
-```
-
-Each evaluation writes machine-readable results at the paths consumed by the
-dashboard. These generated files are local experiment outputs and are not
-committed; running an evaluation again updates that mode's measurements.
-
 The test suite requires a PyTorch installation that can import successfully on the
 host. The CI workflow uses Python 3.11 and installs the project dependencies on an
 Ubuntu runner; CUDA validation is not part of CI and is documented in

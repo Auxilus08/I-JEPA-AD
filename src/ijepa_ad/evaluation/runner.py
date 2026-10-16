@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import time
 from pathlib import Path
 from typing import Any
@@ -171,22 +170,15 @@ def evaluate_pilot(
     device: str,
     mode: InferenceMode,
     masking_config: str | Path,
-    masking_threshold: float | None = None,
+    threshold: float | None = None,
     target_fpr: float = 0.05,
     num_thresholds: int = 200,
 ) -> dict[str, Any]:
-    """Evaluate selected categories with one shared scoring configuration.
-
-    ``masking_threshold`` gates adaptive fine masking; it is not the
-    validation-calibrated image decision threshold reported in each result.
-    """
-    if masking_threshold is not None:
-        if not math.isfinite(masking_threshold) or masking_threshold < 0:
-            raise ValueError("masking_threshold must be finite and non-negative")
+    """Evaluate selected categories with one shared scoring configuration."""
     encoder_sha256 = compute_file_sha256(encoder_checkpoint)
     settings = load_masking_settings(masking_config)
-    if masking_threshold is not None:
-        settings["threshold"] = masking_threshold
+    if threshold is not None:
+        settings["threshold"] = threshold
     results = []
     for category in categories:
         results.append(

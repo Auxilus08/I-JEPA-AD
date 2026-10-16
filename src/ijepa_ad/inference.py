@@ -148,8 +148,6 @@ class MaskedLatentScorer:
                 f"predictor is on {parameter.device}, "
                 f"but latents are on {latents.device}"
             )
-        if parameter is not None:
-            latents = latents.to(dtype=parameter.dtype)
 
         self.predictor.eval()
         coarse_windows = self.coarse.windows()
