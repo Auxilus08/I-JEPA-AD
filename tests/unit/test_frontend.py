@@ -11,21 +11,29 @@ Verifies:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
+import pandas as pd
 import pytest
 from frontend.components.visualizer import (
     create_heatmap_overlay,
     draw_detected_regions,
 )
 from frontend.config import load_frontend_config
+from frontend.services import backend_interface, experiment_service
 from frontend.services.backend_interface import run_inference
 from frontend.services.experiment_service import (
+    benchmark_efficiency_highlights,
     load_benchmark_summary,
     load_category_auroc_breakdown,
     load_category_threshold,
     load_training_history,
 )
+from numpy.typing import NDArray
 from PIL import Image
+
+from ijepa_ad.caching import latent_cache
 
 
 def test_frontend_config_loads_defaults() -> None:
@@ -102,6 +110,133 @@ def test_nominal_samples_produce_no_detected_regions() -> None:
     )
     assert res["image_score"] < 0.99
     assert res["detected_regions"] == []
+
+
+def test_mock_inference_remains_available_without_torch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(backend_interface, "PYTORCH_AVAILABLE", False)
+    img = Image.new("RGB", (32, 32), color=(128, 128, 128))
+
+    result = run_inference(img, use_mock=True)
+    assert result["is_mock"] is True
+
+    with pytest.raises(RuntimeError, match="requires both PyTorch"):
+        run_inference(img, use_mock=False)
+
+
+def test_disconnected_high_score_clusters_get_separate_boxes() -> None:
+    heatmap: NDArray[np.float32] = np.zeros((20, 20), dtype=np.float32)
+    heatmap[2:6, 3:7] = 0.9
+    heatmap[12:16, 13:17] = 0.8
+
+    regions = backend_interface.detected_regions_for_threshold(
+        heatmap, (20, 20), 0.9, 0.5, "bottle"
+    )
+
+    assert [region["box"] for region in regions] == [
+        [3, 2, 7, 6],
+        [13, 12, 17, 16],
+    ]
+    assert (
+        backend_interface.detected_regions_for_threshold(
+            heatmap, (20, 20), 0.5, 0.5, "bottle"
+        )
+        == []
+    )
+
+
+def test_region_detection_does_not_include_background_when_cutoff_is_zero() -> None:
+    heatmap: NDArray[np.float32] = np.zeros((20, 20), dtype=np.float32)
+    heatmap[3, 4] = 0.9
+    heatmap[15, 16] = 0.8
+
+    regions = backend_interface.detected_regions_for_threshold(
+        heatmap, (20, 20), 0.9, 0.5, "bottle"
+    )
+
+    assert [region["box"] for region in regions] == [
+        [4, 3, 5, 4],
+        [16, 15, 17, 16],
+    ]
+
+
+def test_efficiency_highlights_handle_partial_and_legacy_benchmarks() -> None:
+    partial = pd.DataFrame({"Method": ["Adaptive I-JEPA"], "Image AUROC (%)": [92.5]})
+    partial_highlights = benchmark_efficiency_highlights(partial)
+    assert partial_highlights[0][1] == "—"
+    assert partial_highlights[1][1] == "92.5 %"
+    assert partial_highlights[2][1] == "—"
+
+    legacy = pd.DataFrame(
+        {
+            "Method": ["Adaptive I-JEPA", "Dense-mask I-JEPA"],
+            "Image AUROC (%)": [92.5, 93.0],
+            "Mask Reduction vs Dense (%)": [80.0, 0.0],
+        }
+    )
+    legacy_highlights = benchmark_efficiency_highlights(legacy)
+    assert legacy_highlights[0][1] == "80.0 %"
+    assert legacy_highlights[2][1] == "—"
+    assert "Unavailable" in legacy_highlights[2][2]
+
+
+def test_partial_pilot_results_build_an_incomplete_benchmark(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        experiment_service,
+        "_load_pilot_results",
+        lambda _root: {
+            "adaptive": [
+                {
+                    "category": "bottle",
+                    "num_images": 1,
+                    "image_auroc": 0.9,
+                    "mean_masks_per_image": 14.0,
+                }
+            ],
+            "dense": [],
+        },
+    )
+
+    benchmark, is_synthetic = load_benchmark_summary()
+    highlights = benchmark_efficiency_highlights(benchmark)
+
+    assert is_synthetic is False
+    assert len(benchmark) == 2
+    assert highlights[1][1] == "90.0 %"
+    assert highlights[0][1] == "—"
+    assert highlights[2][1] == "—"
+
+
+def test_encoder_hash_cache_persists_with_checkpoint_fingerprint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    checkpoint = checkpoint_dir / "IN22K-vit.g.16-600e.pth.tar"
+    checkpoint.write_bytes(b"checkpoint")
+    calls: list[Path] = []
+
+    def compute_hash(path: Path) -> str:
+        calls.append(path)
+        return "a" * 64
+
+    monkeypatch.setattr(latent_cache, "compute_file_sha256", compute_hash)
+    backend_interface._checkpoint_sha256.cache_clear()
+    try:
+        assert backend_interface._checkpoint_sha256(str(tmp_path)) == "a" * 64
+        backend_interface._checkpoint_sha256.cache_clear()
+        assert backend_interface._checkpoint_sha256(str(tmp_path)) == "a" * 64
+        assert calls == [checkpoint]
+
+        checkpoint.write_bytes(b"changed checkpoint size")
+        backend_interface._checkpoint_sha256.cache_clear()
+        assert backend_interface._checkpoint_sha256(str(tmp_path)) == "a" * 64
+        assert calls == [checkpoint, checkpoint]
+    finally:
+        backend_interface._checkpoint_sha256.cache_clear()
 
 
 def test_heatmap_overlay_generation() -> None:

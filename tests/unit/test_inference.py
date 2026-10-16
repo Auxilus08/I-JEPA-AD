@@ -18,11 +18,13 @@ class _ControlledPredictor(nn.Module):
         super().__init__()
         self.marker = nn.Parameter(torch.zeros(()))
         self.anomalous = anomalous
+        self.forward_dtype: torch.dtype | None = None
         self.anomaly_indices = tuple(
             row * 14 + column for row in range(4) for column in range(4)
         )
 
     def forward(self, latents: Tensor, target_mask: Tensor) -> Tensor:
+        self.forward_dtype = latents.dtype
         predicted = latents.clone()
         if self.anomalous:
             predicted[:, self.anomaly_indices] *= -1
@@ -69,6 +71,21 @@ def test_inference_rejects_non_finite_latents() -> None:
 
     with pytest.raises(ValueError, match="finite"):
         scorer.score(latents)
+
+
+@pytest.mark.parametrize(  # type: ignore[misc]
+    "cache_dtype", [torch.float16, torch.bfloat16, torch.float32]
+)
+def test_inference_converts_cached_latents_to_predictor_dtype(
+    cache_dtype: torch.dtype,
+) -> None:
+    predictor = _ControlledPredictor()
+    scorer = MaskedLatentScorer(predictor)
+
+    result = scorer.score(torch.ones(1, 196, 4, dtype=cache_dtype))
+
+    assert predictor.forward_dtype == torch.float32
+    assert result.patch_scores.dtype == torch.float32
 
 
 def test_predictor_checkpoint_requires_matching_encoder_provenance(
