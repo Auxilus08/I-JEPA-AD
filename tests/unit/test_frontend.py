@@ -11,6 +11,8 @@ Verifies:
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
@@ -281,3 +283,215 @@ def test_training_and_benchmark_services() -> None:
     threshold, is_calibrated = load_category_threshold("bottle")
     assert 0.0 <= threshold <= 1.0
     assert isinstance(is_calibrated, bool)
+
+
+def _write_pilot_file(root: Path, **row: object) -> None:
+    path = root / "results" / "benchmarks" / "pilot_adaptive.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    record = {"category": "bottle", "mode": "adaptive", **row}
+    path.write_text(json.dumps({"results": [record]}), encoding="utf-8")
+
+
+def test_calibrated_threshold_requires_current_score_definition(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        experiment_service,
+        "__file__",
+        str(tmp_path / "frontend" / "services" / "experiment_service.py"),
+    )
+    # Calibrated on the pre-normalization scale: must not be reused.
+    _write_pilot_file(tmp_path, decision_threshold=0.4)
+    assert load_category_threshold("bottle", default=0.5) == (0.5, False)
+
+    _write_pilot_file(
+        tmp_path,
+        decision_threshold=0.4,
+        image_score_definition={"upper_bound": 4.0},
+    )
+    assert load_category_threshold("bottle", default=0.5) == (0.4, True)
+
+
+# --- predictor checkpoint directory selection (notebook 01 vs notebook 02 outputs) ---
+
+_ENCODER_SHA = "b" * 64
+
+
+def test_resolve_predictor_dir_default_relative_and_absolute(tmp_path: Path) -> None:
+    resolve = backend_interface.resolve_predictor_dir
+    assert resolve(tmp_path) == tmp_path / "checkpoints" / "predictors"
+    assert (
+        resolve(tmp_path, "checkpoints/predictors_augmented")
+        == tmp_path / "checkpoints" / "predictors_augmented"
+    )
+    assert resolve(tmp_path, tmp_path / "elsewhere") == tmp_path / "elsewhere"
+
+
+def test_frontend_config_lists_both_notebook_checkpoint_dirs() -> None:
+    dirs = load_frontend_config()["predictor_checkpoint_dirs"]
+    assert dirs["baseline"] == "checkpoints/predictors"
+    assert dirs["augmented"] == "checkpoints/predictors_augmented"
+    assert load_frontend_config()["defaults"]["predictor_checkpoints"] in dirs
+
+
+def _write_predictor_checkpoint(
+    path: Path, seed: int, category: str = "bottle"
+) -> None:
+    import torch
+
+    from ijepa_ad.predictor.transformer_predictor import (
+        LatentTransformerPredictor,
+        PredictorConfig,
+    )
+
+    torch.manual_seed(seed)
+    config = PredictorConfig(1408, 196, 16, 1, 2, 2.0, 0.0)
+    model = LatentTransformerPredictor(config)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "model_config": config.to_dict(),
+            "training_config": {"loss_type": "cosine", "mask_strategy": "x"},
+            "history": [{"epoch": 1, "train_loss": 0.5 + seed, "val_loss": 0.6}],
+            "cache_provenance": {
+                "category": category,
+                "checkpoint_sha256": _ENCODER_SHA,
+            },
+        },
+        path,
+    )
+
+
+@pytest.fixture  # type: ignore[misc]
+def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """A project root with two real-format predictor sets and a stub encoder."""
+    import torch
+
+    masking = tmp_path / "configs" / "masking"
+    masking.mkdir(parents=True)
+    source = Path(backend_interface.__file__).resolve().parents[2]
+    (masking / "coarse_to_fine.yaml").write_text(
+        (source / "configs" / "masking" / "coarse_to_fine.yaml").read_text("utf-8"),
+        encoding="utf-8",
+    )
+    _write_predictor_checkpoint(tmp_path / "checkpoints/predictors/bottle_cosine.pt", 1)
+    _write_predictor_checkpoint(
+        tmp_path / "checkpoints/predictors_augmented/bottle_cosine.pt", 2
+    )
+
+    class StubEncoder:
+        def encode(self, batch: torch.Tensor) -> torch.Tensor:
+            generator = torch.Generator().manual_seed(0)
+            return torch.randn(batch.shape[0], 196, 1408, generator=generator)
+
+    monkeypatch.setattr(backend_interface, "_project_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        backend_interface, "_checkpoint_sha256", lambda _r: _ENCODER_SHA
+    )
+    monkeypatch.setattr(backend_interface, "_load_encoder", lambda *_a: StubEncoder())
+    backend_interface._load_predictor.cache_clear()
+    yield tmp_path
+    backend_interface._load_predictor.cache_clear()
+
+
+def test_both_notebook_checkpoint_dirs_run_through_the_same_real_inference(
+    fake_project: Path,
+) -> None:
+    image = Image.new("RGB", (64, 64), color=(120, 120, 120))
+
+    default = run_inference(image, category="bottle")
+    baseline = run_inference(
+        image, category="bottle", predictor_dir="checkpoints/predictors"
+    )
+    augmented = run_inference(
+        image, category="bottle", predictor_dir="checkpoints/predictors_augmented"
+    )
+
+    for result in (default, baseline, augmented):
+        assert result["is_mock"] is False
+        assert result["pixel_heatmap"].shape == (224, 224)
+    # No directory means the baseline notebook's directory (previous behavior).
+    assert default["image_score"] == baseline["image_score"]
+    # Same stub latents, different weights: the selected directory was really loaded.
+    assert augmented["image_score"] != baseline["image_score"]
+
+
+def test_selected_directory_still_goes_through_provenance_checked_loader(
+    fake_project: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    image = Image.new("RGB", (64, 64), color=(120, 120, 120))
+    # Checkpoint trained for another category must be refused, not loaded.
+    _write_predictor_checkpoint(
+        fake_project / "checkpoints/predictors_augmented/capsule_cosine.pt",
+        3,
+        category="bottle",
+    )
+    with pytest.raises(ValueError, match="category does not match"):
+        run_inference(
+            image,
+            category="capsule",
+            predictor_dir="checkpoints/predictors_augmented",
+        )
+    # A checkpoint trained with a different encoder must be refused too.
+    monkeypatch.setattr(backend_interface, "_checkpoint_sha256", lambda _r: "c" * 64)
+    backend_interface._load_predictor.cache_clear()
+    with pytest.raises(ValueError, match="different encoder"):
+        run_inference(
+            image,
+            category="bottle",
+            predictor_dir="checkpoints/predictors_augmented",
+        )
+
+
+def test_missing_checkpoint_in_selected_directory_names_that_directory(
+    fake_project: Path,
+) -> None:
+    image = Image.new("RGB", (64, 64), color=(120, 120, 120))
+    with pytest.raises(FileNotFoundError, match="predictors_augmented"):
+        run_inference(
+            image,
+            category="capsule",
+            predictor_dir="checkpoints/predictors_augmented",
+        )
+
+
+def test_training_history_and_threshold_follow_the_selected_directory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        experiment_service,
+        "__file__",
+        str(tmp_path / "frontend" / "services" / "experiment_service.py"),
+    )
+    _write_predictor_checkpoint(tmp_path / "checkpoints/predictors/bottle_cosine.pt", 1)
+    _write_predictor_checkpoint(
+        tmp_path / "checkpoints/predictors_augmented/bottle_cosine.pt", 2
+    )
+    baseline, _ = load_training_history(
+        "bottle", predictor_dir="checkpoints/predictors"
+    )
+    augmented, _ = load_training_history(
+        "bottle", predictor_dir="checkpoints/predictors_augmented"
+    )
+    assert float(baseline["Train Loss"].iloc[0]) == 1.5
+    assert float(augmented["Train Loss"].iloc[0]) == 2.5
+
+    # A threshold calibrated for one checkpoint set is never reused for another.
+    _write_pilot_file(
+        tmp_path,
+        decision_threshold=0.4,
+        image_score_definition={"upper_bound": 4.0},
+        predictor_checkpoint="checkpoints/predictors/bottle_cosine.pt",
+    )
+    baseline_dir, augmented_dir = (
+        "checkpoints/predictors",
+        "checkpoints/predictors_augmented",
+    )
+    assert load_category_threshold("bottle", predictor_dir=baseline_dir) == (0.4, True)
+    assert load_category_threshold("bottle", predictor_dir=augmented_dir) == (
+        0.5,
+        False,
+    )
+    # Without a selection the original behavior is unchanged.
+    assert load_category_threshold("bottle") == (0.4, True)

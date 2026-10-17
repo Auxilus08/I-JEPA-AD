@@ -9,11 +9,16 @@ import streamlit as st
 from PIL import Image
 
 from frontend.components.visualizer import create_heatmap_overlay, draw_detected_regions
-from frontend.config import load_frontend_config
+from frontend.config import (
+    DEFAULT_PREDICTOR_CHECKPOINTS,
+    DEFAULT_PREDICTOR_DIRS,
+    load_frontend_config,
+)
 from frontend.services.backend_interface import (
     PYTORCH_AVAILABLE,
     REAL_METHODS,
     detected_regions_for_threshold,
+    resolve_predictor_dir,
     run_inference,
 )
 from frontend.services.experiment_service import (
@@ -173,6 +178,9 @@ cfg = load_frontend_config()
 categories = cfg.get("categories", [])
 methods = cfg.get("methods", {})
 defaults = cfg.get("defaults", {})
+predictor_dirs: dict[str, str] = cfg.get("predictor_checkpoint_dirs") or dict(
+    DEFAULT_PREDICTOR_DIRS
+)
 
 # Initialize session state for inspection results (Fix Issue 9)
 if "inspection_result" not in st.session_state:
@@ -201,7 +209,23 @@ with st.sidebar:
 
     force_mock = st.checkbox("Synthetic mock mode", value=False)
     root_dir = Path(__file__).resolve().parent.parent
-    predictor_dir = root_dir / "checkpoints" / "predictors"
+    predictor_options = list(predictor_dirs)
+    default_predictor_set = defaults.get(
+        "predictor_checkpoints", DEFAULT_PREDICTOR_CHECKPOINTS
+    )
+    predictor_set = st.selectbox(
+        "Predictor checkpoints",
+        options=predictor_options,
+        index=(
+            predictor_options.index(default_predictor_set)
+            if default_predictor_set in predictor_options
+            else 0
+        ),
+        format_func=lambda key: f"{key} ({predictor_dirs[key]})",
+        disabled=force_mock,
+    )
+    predictor_dir_setting = predictor_dirs[predictor_set]
+    predictor_dir = resolve_predictor_dir(root_dir, predictor_dir_setting)
     available_categories = [
         category
         for category in categories
@@ -212,7 +236,8 @@ with st.sidebar:
     )
     if not force_mock and not available_categories:
         st.warning(
-            "No real predictor checkpoints are available; enable mock mode to demo."
+            f"No real predictor checkpoints in {predictor_dir_setting}; "
+            "pick another checkpoint set or enable mock mode to demo."
         )
 
     selected_category = st.selectbox(
@@ -250,8 +275,14 @@ with st.sidebar:
             selected_category,
             mode=REAL_METHODS[selected_method],
             default=configured_threshold,
+            predictor_dir=predictor_dir_setting,
         )
-    threshold_context = (selected_category, selected_method, force_mock)
+    threshold_context = (
+        selected_category,
+        selected_method,
+        force_mock,
+        predictor_set,
+    )
     if st.session_state.get("_threshold_context") != threshold_context:
         st.session_state["decision_threshold"] = anomaly_threshold_default
         st.session_state["_threshold_context"] = threshold_context
@@ -419,6 +450,7 @@ with tab_infer:
                         category=selected_category,
                         use_mock=force_mock,
                         anomaly_threshold=anomaly_threshold,
+                        predictor_dir=predictor_dir_setting,
                     )
                 except (
                     FileNotFoundError,
@@ -435,6 +467,7 @@ with tab_infer:
                         "mode": (
                             "mock" if force_mock else REAL_METHODS[selected_method]
                         ),
+                        "predictor_checkpoints": predictor_set,
                         "source": input_mode,
                     }
                     st.session_state["inspection_result"] = result
@@ -449,6 +482,7 @@ with tab_infer:
             "category": selected_category,
             "method": selected_method,
             "mode": "mock" if force_mock else REAL_METHODS[selected_method],
+            "predictor_checkpoints": predictor_set,
             "source": input_mode,
         }
         if (
@@ -457,7 +491,8 @@ with tab_infer:
         ):
             st.warning(
                 "These results are stale because the selected category, method, "
-                "inference mode, or input source changed. Run Detection again."
+                "inference mode, predictor checkpoints, or input source changed. "
+                "Run Detection again."
             )
             current_result = None
             current_img = None
@@ -579,13 +614,13 @@ with tab_train:
     )
 
     df_hist, is_synth_hist = load_training_history(
-        category=selected_category, epochs=50
+        category=selected_category, epochs=50, predictor_dir=predictor_dir_setting
     )
 
     if is_synth_hist:
         st.info(
             "ℹ️ **Illustrative Training Curves:** No trained checkpoint found "
-            f"at `checkpoints/predictors/{selected_category}_cosine.pt`. Displaying "
+            f"at `{predictor_dir_setting}/{selected_category}_cosine.pt`. Displaying "
             "representative convergence curves for interface validation."
         )
 

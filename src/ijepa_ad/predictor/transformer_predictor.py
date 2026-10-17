@@ -80,6 +80,12 @@ class LatentTransformerPredictor(nn.Module):
             raise ValueError(
                 f"target_mask must be B x tokens, got {tuple(target_mask.shape)}"
             )
+        parameter_dtype = self.input_projection.weight.dtype
+        if latents.dtype != parameter_dtype:
+            raise TypeError(
+                f"latents are {latents.dtype} but the predictor parameters are "
+                f"{parameter_dtype}; cast the latents (e.g. cached float16) first"
+            )
         mask = target_mask.to(device=latents.device, dtype=torch.bool)
         if not bool(mask.any()):
             raise ValueError("target_mask must select at least one token")

@@ -1,56 +1,36 @@
 # TRANSFER.md
-_Last updated: 2026-10-15_
+_Last updated: 2026-10-17 01:05, by Claude Code, at commit 4cde531 (HEAD of branch `mask-align`, identical to `origin/mask-align`; working tree has only an uncommitted one-line `.gitignore` edit adding `dataset/` (not made by this session's tooling) plus this TRANSFER.md update; `dataset/` itself is untouched)_
 
-## 1. Current project state
+## 1. One-paragraph project state
 
-The three-category MVTec pilot has completed its first real-model pass: the official
-I-JEPA ViT-g/16 checkpoint was loaded on CUDA, real train/validation/test latent caches
-were built, six cosine/L2 predictors were trained, and adaptive/fixed/dense I-JEPA
-inference was evaluated on the official test splits. The Streamlit dashboard now uses
-real inference by default and reads the measured pilot results. These are pilot results,
-not full-benchmark claims.
-
-The environment used was Python 3.12.4, PyTorch 2.2.2+cu121, NumPy 1.26.4, and PyArrow
-18.1.0 on an RTX 4090 with 24 GB VRAM. CUDA was available, `pip check` passed, and the
-frontend constrains PyArrow to `<19` because newer wheels require NumPy 2.x, which is
-incompatible with the pinned PyTorch 2.2 environment.
+The pipeline code is complete for the three-category pilot (bottle, capsule, hazelnut): frozen I-JEPA wrapper, latent caches, Transformer predictor, coarse-to-fine inference, fusion, metrics and a Streamlit UI. An earlier session (RTX 4090 machine) recorded real-model pilot results (see §3, "Historical"), but **none of those artifacts exist in this checkout** (no `checkpoints/`, `external/ijepa`, `data/cache/`, or `results/*`), so they cannot be re-verified here. On 2026-10-17 an audit led to code changes, all now **committed and pushed to `origin/mask-align`**: commit 512aa19 (predictor training masks match the inference masks, bilinear UI heatmap, fingerprinted augmentation/caches, un-unfreezable encoder wrapper, seeds and code provenance in checkpoints) and commit **4cde531, the current HEAD** (evaluation JSON records predictor `training_config`/`reproducibility`/`mask_strategy`, with legacy checkpoints reporting `null`/`legacy` and nothing inferred; validation masks are per sample, from a SHA-256 of seed and image id, and independent of batch size; `image_score` is `max(patch_scores) / upper_bound(mode, lambda)` so adaptive scores above 2 no longer saturate). Details are in DECISIONS.md, 2026-10-17 entries. **Because the training masks, validation masks and image score changed, all previously trained predictors must be retrained, and the historical pilot numbers, validation losses and adaptive/dense image scores and thresholds are not comparable with anything produced from this code.** **No real I-JEPA, GPU or cache experiment has been run from this checkout.** The only machine-level progress is that the current machine reports an RTX 4060 (8 GB) to `nvidia-smi`, but its PyTorch is CPU-only (2.2.2+cpu), so the environment-readiness gate (§4, §8) has not been passed.
 
 ## 2. Phase checklist
 
-- **Pilot data and environment:** DONE. Bottle, Capsule, and Hazelnut are staged at
-  `data/raw/mvtec_ad`; originals were preserved. Category-level split validation passed.
-- **Encoder and caches:** DONE for the pilot. Meta I-JEPA is pinned at
-  `52c1ae95d05f743e000e8f10a1f3a79b10cff048`; the official checkpoint is
-  16,534,564,553 bytes, SHA-256
-  `a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b`.
-  Real ViT-g/16 inference and all nine train/validation/test cache entries were verified.
-- **Predictor:** DONE for the initial pilot. Six 100-epoch runs were extended using only
-  nominal validation loss: all six to a 200-epoch cap, then Bottle and Capsule to 300.
-  Bottle still improved through epoch 290; its cosine/L2 runs are not yet converged.
-- **Inference and metrics:** DONE for the three I-JEPA schedules. Real masked-latent
-  scoring, image/pixel AUROC, and AUPRO are implemented and exercised. The evaluation
-  used 100 AUPRO thresholds and calibrated decision thresholds from nominal validation
-  scores only.
-- **Dashboard:** DONE for pilot integration. Real mode is the default; mock mode requires
-  explicit selection. Measured benchmark tables render. A compatible frontend dependency
-  range is recorded in `pyproject.toml`.
-- **Full benchmark and comparisons:** NOT DONE. Only 3 of 15 categories are available;
-  PatchCore and MAE are not implemented as valid comparable baselines. Ablations,
-  multi-seed uncertainty/statistical analysis, and paper assets remain outstanding.
-- **Target hardware:** NOT DONE. Only the RTX 4090 (24 GB) was tested; no RTX 4060/8 GB
-  compliance claim is supported.
+- **Pilot data and environment:** DONE (local copies at `dataset/` and `data/raw/mvtec_ad`; split validation re-run on 2026-10-17: 0 overlap train/val/test by content hash).
+- **Encoder and caches:** code DONE; real encoder/caches IN PROGRESS locally (checkpoint and official repo not present here).
+- **Predictor:** code DONE incl. inference-aligned masks; retraining NOT STARTED.
+- **Inference and metrics:** code DONE; a new real evaluation NOT STARTED.
+- **Augmentation workflow:** code DONE (fingerprinted, per-category); notebook 02 not executed with the real encoder.
+- **Dashboard:** DONE for the pilot; heatmap now bilinear.
+- **Full benchmark and comparisons:** NOT DONE. Only 3 of 15 categories; `baselines/` PatchCore and MAE are placeholders, and `DenseMaskedIJEPA`/`FixedMaskIJEPA` run on precomputed scores, not on the predictor.
+- **Target hardware (RTX 4060, 8 GB):** NOT DONE. The GPU is visible to `nvidia-smi` on the current machine (driver 617.14), but CUDA PyTorch is not installed and nothing has been measured on it.
+- **Environment-readiness gate (CUDA torch, `external/ijepa`, checkpoint, encoder memory test):** NOT STARTED; see §4 and §8.
 
-## 3. Pilot evidence
+## 3. What is verified working right now
 
-Dataset counts:
+**Currently reproducible (CPU, this checkout).** Backed by tests re-run on 2026-10-17 at commit 4cde531 (`pytest -p no:cacheprovider -q tests`: **325 passed** in 14.8 s, re-confirmed during this session; 283 at 512aa19; `ruff check` and `black --check` clean at the last full check; mypy has 3 pre-existing errors, none in changed code). These prove code behaviour on synthetic data and the mock encoder, not model quality:
+- Predictor provenance in evaluation: current, partial and legacy checkpoints, integrity checks kept, result JSON-serializable (`tests/unit/test_inference.py`, `tests/unit/test_evaluation_provenance.py`; the latter stubs datasets and uses a tiny real checkpoint file).
+- Validation masks identical for batch sizes 1/4/16, reordered samples, partial batches, across `PYTHONHASHSEED` values, no global RNG use (`tests/unit/test_validation_masks.py`).
+- Image-score bounds per mode/lambda, extremes map to 0 and 1, raw 2 vs 3 no longer tie, ranking preserved (`tests/unit/test_inference.py`); frontend ignores calibrated thresholds lacking `image_score_definition` (`tests/unit/test_frontend.py`).
+- Inference-aligned mask sampler: block rows equal the 16 coarse inference windows, single rows are isolated tokens, determinism, context always remains (`tests/unit/test_target_masks.py`).
+- No target leakage: rewriting target latents leaves predictor output unchanged; loss equals mean `1 - cos` over target tokens only.
+- Bilinear upsampling shared by evaluation and UI; normalisation is display-only (`tests/unit/test_score_maps.py`).
+- Augmentation reproducibility, per-category capsule override, fingerprinted outputs, cache rebuilds on changed checkpoint/preprocessing/content (`tests/unit/test_augmentation.py`, `tests/integration/test_augmented_cache_invalidation.py`).
+- Encoder stays frozen and in eval mode under a parent `.train()`; dtype guards (`tests/unit/test_dtype_and_freeze_safety.py`); non-finite loss stops training; checkpoint `reproducibility` block (`tests/integration/test_predictor_training_masks.py`).
+- Wiring smoke on CPU with the **mock** encoder on real bottle images (outputs in the session scratchpad only): cache CLI, 2-epoch training via `scripts/train_predictor.py`, checkpoint load with `load_predictor_checkpoint`, adaptive scoring. This proves plumbing, not model quality.
 
-| Category | Train | Test | Nominal test | Defect test / masks |
-| --- | ---: | ---: | ---: | ---: |
-| bottle | 209 | 83 | 20 | 63 |
-| capsule | 219 | 132 | 23 | 109 |
-| hazelnut | 391 | 110 | 40 | 70 |
-
-Image AUROC / pixel AUROC / AUPRO on the official test split:
+**Historical only (RTX 4090 session, 2026-10-15; also in `REPRODUCIBILITY.md` and `docs/GPU_VALIDATION_CHECKLIST.md`).** Not reproducible from this checkout, produced with scattered-mask predictors, the old validation masks and the old image score, so **not a baseline for, and not comparable with, any run from commit 4cde531**. Image AUROC / pixel AUROC / AUPRO, official test split:
 
 | Category | Adaptive | Fixed | Dense |
 | --- | --- | --- | --- |
@@ -58,60 +38,49 @@ Image AUROC / pixel AUROC / AUPRO on the official test split:
 | capsule | 0.4986 / 0.6939 / 0.0959 | 0.4986 / 0.6939 / 0.0959 | 0.5325 / 0.7962 / 0.2372 |
 | hazelnut | 0.6536 / 0.8774 / 0.4876 | 0.6179 / 0.8746 / 0.4880 | 0.5421 / 0.7703 / 0.3681 |
 
-Adaptive evaluated an average of 16.39, 16.00, and 17.60 masks per image for Bottle,
-Capsule, and Hazelnut, respectively, versus 196 for dense. The benchmark UI reports
-macro-average measured pilot values. Its latency is cached-latent predictor scoring
-only and excludes image encoding; end-to-end UI inference includes the encoder. Do not
-use these test results to tune thresholds or hyperparameters.
+Adaptive averaged 16.39 / 16.00 / 17.60 masks per image (bottle/capsule/hazelnut) vs 196 dense, i.e. the gate (τ=0.5, cosine-distance units) almost never fired, so adaptive ≈ fixed. Do not use test results to tune thresholds.
 
-Validation-calibrated adaptive decision thresholds (target 5% nominal validation FPR):
-Bottle `0.31648`, Capsule `0.41187`, Hazelnut `0.44221`. The observed validation rates
-were 1/21, 1/22, and 1/39. Threshold comparisons use strict `score > threshold`.
+## 4. What is NOT done yet (explicit, so it isn't assumed)
 
-Validation-only training extensions used seed 0 and patience 25. The official-test
-benchmarks above still use the original 100-epoch checkpoints; the extension checkpoints
-are isolated under `results/predictor_extension_200/` and
-`results/predictor_extension_300/` and were not evaluated on the test split.
+- Real-model verification after the 2026-10-17 changes: loading Meta ViT-g/16 on this machine, building real caches, retraining predictors with `inference_aligned` masks, re-evaluating. None done.
+- Environment-readiness requirements still open (state measured read-only on 2026-10-17; nothing installed or downloaded): (1) CUDA PyTorch (installed torch is 2.2.2+cpu; `torch.cuda.is_available()` is False); (2) `external/ijepa` checkout pinned to `52c1ae95d05f743e000e8f10a1f3a79b10cff048` (absent); (3) `checkpoints/IN22K-vit.g.16-600e.pth.tar`, 16,534,564,553 bytes, SHA-256 `a373c7b1…82cf0b` (absent; the hash comes from the 4090 session, so a match is a cross-check, not an independent reference); (4) an encoder memory test on the RTX 4060 with the **production fp32 wrapper** (not yet run); (5) real latent caches under `data/cache/latents` (absent); (6) predictors under `checkpoints/predictors*` (absent).
+- Encoder memory on 8 GB is unknown. `IJEPAEncoder` does not call `.half()` or autocast, so production encoding runs in fp32, whereas `scripts/spikes/check_encoder_vram.py` measures an FP16 model (the old 4090 numbers, 1.9–2.1 GB, came from it). Neither the old numbers nor that script describe the production path.
+- Host RAM during checkpoint load is unknown: `_load_checkpoint` calls `torch.load(map_location="cpu")` without `mmap`, and the checkpoint is 16.5 GB (it probably holds more than `target_encoder`; unverified until downloaded). This machine has 15.8 GB RAM (4.4 GB free at inspection) and a 6.6 GB system-managed pagefile. The load may be slow or fail; if it fails, a code change (e.g. `mmap=True`) would be needed and must be logged in DECISIONS.md.
+- No script for exhaustive validation-only comparison of two predictors (`inference_aligned` vs `random`) or for τ/λ selection. `scripts/evaluate_pilot.py` always loads and scores the official **test** cache, and has no `--lambda` flag (λ comes from the masking YAML). No synthetic-defect proxy generator exists (`data/augmentation.py` is nominal-image augmentation only).
+- Provenance gaps: see §6.
+- Real behaviour of the train/inference mask alignment on real latents (effect size unknown); the synthetic experiment only showed a gap exists in principle.
+- Possible context leakage via full-image encoding (context tokens are computed with attention over the masked region too); not measured.
+- τ and λ selection on nominal validation data only; τ=0.5 is uncalibrated.
+- `image_score` is normalised per (mode, λ): scores are not comparable across modes or λ (use `raw_image_score` / the recorded `image_score_definition`). Fixed-mode bound 2 is unchanged; adaptive/dense differ from earlier reports.
+- Validation losses are comparable only between runs with the same mask strategy and parameters; do not rank `random` vs `inference_aligned` by validation loss.
+- Real baselines (PatchCore, MAE), 12 remaining MVTec categories, ablations, multi-seed statistics, RTX 4060/8 GB validation.
+- No LR scheduler, gradient clipping, AMP or optimizer-state saving (deliberately not added; no evidence they are needed).
+- `python -m ijepa_ad.predictor.training` silently does nothing (no `__main__` guard); use `scripts/train_predictor.py`.
 
-| Category | Objective | Best at 100 | Best extended | Extended run |
-| --- | --- | ---: | ---: | --- |
-| bottle | cosine | 0.051810 (epoch 99) | 0.033670 (epoch 290) | 300 epochs |
-| bottle | L2 | 0.089058 (epoch 98) | 0.055142 (epoch 290) | 300 epochs |
-| capsule | cosine | 0.105533 (epoch 100) | 0.095222 (epoch 190) | stopped at 215 |
-| capsule | L2 | 0.179605 (epoch 100) | 0.160209 (epoch 190) | stopped at 215 |
-| hazelnut | cosine | 0.182006 (epoch 100) | 0.180196 (epoch 108) | stopped at 133 |
-| hazelnut | L2 | 0.278700 (epoch 99) | 0.276434 (epoch 120) | stopped at 145 |
+## 5. Environment & reproduction
 
-## 4. Reproduction and verification
+- Windows 11, Python 3.12.10, `.venv\Scripts\python.exe`, torch 2.2.2+cpu locally (`torch.cuda.is_available()` is False). Hardware seen on 2026-10-17: NVIDIA GeForce RTX 4060, 8188 MiB, driver 617.14 (plus an Intel UHD 770 iGPU); 15.8 GB RAM; 271 GB free on `C:`. Install: `python -m pip install -e ".[dev,frontend]"`. For the GPU run, replace torch with the CUDA build that matches the 4090 pilot and `requirements-lock.txt` (torch 2.2.2, numpy 1.26.4): `python -m pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121`, then verify `torch.cuda.is_available()` and `torch.cuda.get_device_name(0)`.
+- CLI contracts (read from the code on 2026-10-17): `scripts/build_latent_cache.py` (= `ijepa_ad.caching.cli`: `--category … --purpose nominal|test --batch-size 8 --device cpu --val-fraction 0.1 --seed 0 --rebuild --checkpoint --official-repo --summary-json`; the `--summary-json` parent directory must already exist); `scripts/train_predictor.py` (= `ijepa_ad.predictor.training.main`; required `--category --checkpoint-sha256 --output`; `--mask-strategy inference_aligned|random`, default `inference_aligned`; defaults mirror `configs/predictor/base.yaml` but the CLI does not read that YAML; `--device` defaults to `cpu`); `scripts/evaluate_pilot.py` (`--category --mode adaptive|dense|fixed --checkpoint-dir --cache-root --encoder-checkpoint --masking-config --device cuda --masking-threshold --target-fpr --num-thresholds --output`; predictor path is hardcoded to `<checkpoint-dir>/<category>_cosine.pt`; use `configs/masking/coarse_to_fine.yaml` for all three modes, the `fixed_mask.yaml` and `dense_baseline.yaml` files lack keys `load_masking_settings` requires).
+- Verify: `.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider -q tests`, `.\.venv\Scripts\ruff.exe check .`, `.\.venv\Scripts\black.exe --check .`, `.\.venv\Scripts\mypy.exe src tests` (pre-existing mypy errors: unused `type: ignore` at `src/ijepa_ad/evaluation/metrics.py:10`; `frontend/config.py:50` missing yaml stubs; `frontend/services/backend_interface.py:179` returning Any; the last two appear when `frontend` is included).
+- Local-only state a new environment lacks: Meta checkpoint `checkpoints/IN22K-vit.g.16-600e.pth.tar` (SHA-256 recorded earlier: `a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b`), pinned Meta repo at `external/ijepa` (commit `52c1ae95d05f743e000e8f10a1f3a79b10cff048`), latent caches under `data/cache/`, and predictors under `checkpoints/`. Rebuild caches with `scripts/build_latent_cache.py`; train with `scripts/train_predictor.py` or notebook 01/02.
+- First-bottle-pilot gates (PowerShell, repo root; derived from the CLIs above, none run yet). A: `.\.venv\Scripts\python.exe -m pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121`, then `.\.venv\Scripts\python.exe -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"`. B: `git clone https://github.com/facebookresearch/ijepa.git external/ijepa`; `git -C external/ijepa checkout 52c1ae95d05f743e000e8f10a1f3a79b10cff048`; `curl.exe -L -C - -o checkpoints/IN22K-vit.g.16-600e.pth.tar https://dl.fbaipublicfiles.com/ijepa/IN22K-vit.g.16-600e.pth.tar` (after `mkdir checkpoints`); `Get-FileHash checkpoints\IN22K-vit.g.16-600e.pth.tar -Algorithm SHA256` must equal the hash in §4. C: load `IJEPAEncoder(..., device="cuda")` and encode `torch.randn(n,3,224,224)` for n in 1, 2, 4, 8, recording `torch.cuda.max_memory_allocated()` and any OOM; pick the cache batch size from that table (start at 4), and use one batch size for every cache. D: `mkdir results\pilot2`; `python scripts/build_latent_cache.py --category bottle --device cuda --batch-size <N> --summary-json results/pilot2/cache_nominal_bottle.json` (summary must show `ok: true`, 0 failures). E: `python scripts/train_predictor.py --category bottle --checkpoint-sha256 <SHA> --mask-strategy inference_aligned --seed 0 --device cuda --max-epochs <fixed once> --output checkpoints/predictors/bottle_cosine.pt`. F: the same command with `--mask-strategy random --mask-ratio 0.4 --output checkpoints/predictors_random/bottle_cosine.pt`. G/H: no script yet (see §4). I: only after τ/λ are frozen, `python scripts/build_latent_cache.py --category bottle --purpose test --device cuda --batch-size <N>`, then `python scripts/evaluate_pilot.py --category bottle --mode <fixed|adaptive|dense> --masking-threshold <τ> --output results/pilot2/eval_bottle_<mode>.json` for each mode (add `--checkpoint-dir checkpoints/predictors_random` for the control).
+- `dataset/` (untracked in git; at HEAD it is not gitignored, and an uncommitted local `.gitignore` edit currently ignores it) duplicates `data/raw/mvtec_ad` (counts match; not hash-compared).
 
-Run commands from the `I-JEPA-AD` project root. On this Windows machine, use
-`.venv\Scripts\python.exe`.
+## 6. Known issues / open threads
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests\unit\test_inference.py tests\unit\test_evaluation_metrics.py tests\unit\test_frontend.py tests\unit\test_ijepa_wrapper.py tests\unit\test_seeding.py -q
-.\.venv\Scripts\ruff.exe check .
-.\.venv\Scripts\mypy.exe src tests
-.\.venv\Scripts\python.exe scripts\evaluate_pilot.py --help
-.\.venv\Scripts\python.exe -m streamlit run frontend\app.py
-```
+- Old predictor checkpoints (scattered masks) still load and score; they are simply not aligned with inference. Legacy checkpoints have no recorded `mask_strategy`, so evaluation reports it as `null`.
+- Existing `results/benchmarks/pilot_*.json` (none in this checkout) predate `image_score_definition`; the UI will not reuse their calibrated thresholds.
+- Remaining provenance gaps (checked 2026-10-17): the encoder source commit (`external/ijepa` SHA) is not recorded in any cache, checkpoint or result JSON; the cache encoding batch size is only in the optional `--summary-json`; GPU name, CUDA/cuDNN versions and determinism flags are not recorded in predictor or evaluation JSON (only torch/python versions and git commit/dirty); the evaluation JSON records no git commit, timestamp, CLI arguments, or val/test sample-id hashes (cache entries and predictor `cache_provenance` hold them); nothing records how τ and λ were chosen; evaluation does not check that the predictor's training `block_size` equals the masking config's `coarse_size`; `git_dirty` ignores untracked files. Recorded and verified present: mask strategy, training config, seeds, encoder checkpoint SHA-256, image-score definition, masking τ/λ/grid sizes, category, nominal split fraction/seed.
+- UI `heatmap` is min-max normalised per image (display only); never feed it to metrics.
+- `baselines/` placeholders must not be reported as PatchCore/MAE results.
+- Evaluation uses the validation set for both early stopping and the 5%-FPR threshold (slightly optimistic).
+- `torch.load` of the Meta checkpoint is not `weights_only` (trusted file).
 
-The latest focused verification passed 30 tests; Ruff and mypy passed for the recently
-changed inference, evaluation, and frontend files. The complete test suite has not yet
-been rerun on this environment. Real encoder smoke test, cache counts, training losses,
-metrics, and environment details are recorded in `REPRODUCIBILITY.md` and
-`docs/GPU_VALIDATION_CHECKLIST.md`.
+## 7. Where to look for more detail
 
-## 5. Remaining implementation sequence
+- Rationale: `DECISIONS.md` entries dated 2026-10-17 (masks, upsampling, augmentation, capsule flip, freeze/dtype/provenance, predictor provenance in evaluation, per-sample validation masks, image-score normalisation).
+- Architecture and flows: `FLOW.md` §2–§4. Real-model pilot environment: `REPRODUCIBILITY.md`, `docs/GPU_VALIDATION_CHECKLIST.md`.
 
-1. Decide whether to extend Bottle training beyond 300 epochs; its best validation loss
-   was still at epoch 290. Keep the test split isolated until the selection rule is fixed.
-2. Obtain the other 12 MVTec categories; stage and validate them without altering source
-   copies.
-3. Implement reproducible PatchCore and MAE comparators with equivalent preprocessing,
-   splits, and evaluation; otherwise keep comparison claims explicitly scoped to I-JEPA
-   schedules.
-4. Run the frozen protocol across all 15 categories, repeat selected experiments across
-   seeds, and report uncertainty/statistical tests plus full encoder-inclusive latency
-   and memory.
-5. Validate the intended 8 GB device separately, generate paper assets from machine-
-   readable results, then update the claims and protocol documentation.
+## 8. Immediate next step
+
+Pass the environment-readiness gate, in order, stopping at the first failure: (A) install CUDA PyTorch 2.2.2 and verify the RTX 4060 is used; (B) clone `external/ijepa` at the pinned commit, download the checkpoint, verify size and SHA-256; (C) run a fp32 encoder memory test (batch 1, 2, 4, 8, with OOM handling) through `IJEPAEncoder` and watch host RAM during the load; then build the bottle nominal cache, train the `inference_aligned` bottle predictor and a `random`-mask control with the same cache and seed. Before any test evaluation, a validation-only comparison/calibration script must be written (none exists) and τ and λ frozen on nominal validation data. The command sequence is in §5.

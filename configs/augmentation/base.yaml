@@ -1,0 +1,25 @@
+# Augmentation randomness only. The nominal train/validation split is configured in
+# configs/data/mvtec.yaml (nominal_split) and must not change with these settings.
+augmentation:
+  copies_per_image: 3
+  seed: 0
+  max_rotation_degrees: 8.0
+  horizontal_flip_probability: 0.5
+  brightness_factor: 0.12
+  contrast_factor: 0.12
+  blur_probability: 0.15
+
+# Per-category overrides of the values above.
+category_overrides:
+  capsule:
+    # Capsule images are not mirror-symmetric: black cap on the left, orange body
+    # with the "500" imprint and the "actavis" logo on the right. A mirrored capsule
+    # (cap on the right, reversed text) never occurs in the nominal or test data and
+    # would teach the predictor that reversed print is normal, hiding the
+    # faulty_imprint defect class. Rotation, brightness and contrast still apply.
+    horizontal_flip_probability: 0.0
+
+output:
+  image_root: data/augmented/mvtec_ad
+  cache_root: data/cache/latents_augmented
+  checkpoint_root: checkpoints/predictors_augmented

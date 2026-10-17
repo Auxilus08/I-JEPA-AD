@@ -47,6 +47,11 @@ def _selected(
         raise ValueError(
             f"predicted and target must be B x tokens x dim, got {predicted.ndim}D"
         )
+    # Reduce in at least float32 so half-precision tensors cannot lose the cosine.
+    dtype = torch.promote_types(
+        torch.promote_types(predicted.dtype, target.dtype), torch.float32
+    )
+    predicted, target = predicted.to(dtype), target.to(dtype)
     if target_mask is None:
         return predicted, target
     if target_mask.shape != predicted.shape[:2]:

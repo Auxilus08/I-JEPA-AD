@@ -127,6 +127,7 @@ def test_predictor_overfits_tiny_synthetic_cache_and_saves_checkpoint(
     _write_cache(tmp_path, "val", 4)
     train = load_cached_latent_dataset(tmp_path, _expected("train"))
     val = load_cached_latent_dataset(tmp_path, _expected("val"))
+    torch.manual_seed(0)  # model init is outside train_predictor's own seeding
     model = LatentTransformerPredictor(
         PredictorConfig(
             embedding_dim=DIM,
@@ -256,8 +257,13 @@ def test_validation_masks_repeat_each_epoch_independently_of_training(
 
     train_predictor(_model(), train, val, _training_config(max_epochs=2))
 
-    assert len(sampled_masks) == 4
-    assert torch.equal(sampled_masks[1], sampled_masks[3])
+    # Per epoch: training batch call(s) followed by one call per validation sample.
+    per_epoch = len(sampled_masks) // 2
+    assert per_epoch * 2 == len(sampled_masks) and per_epoch > len(val)
+    first, second = sampled_masks[:per_epoch], sampled_masks[per_epoch:]
+    assert not torch.equal(first[0], second[0])  # training masks keep varying
+    for before, after in zip(first[-len(val) :], second[-len(val) :], strict=True):
+        assert torch.equal(before, after)  # validation masks repeat each epoch
 
 
 def test_batch_iterator_yields_batches_lazily(tmp_path: Path) -> None:

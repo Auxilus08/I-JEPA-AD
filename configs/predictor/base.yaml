@@ -11,6 +11,13 @@ training:
   max_epochs: 100
   learning_rate: 0.0001
   weight_decay: 0.05
+  # inference_aligned trains on the masks inference scores: one 4x4 coarse window, or
+  # isolated tokens standing in for 1x1 masks. block_size must equal coarse_size in
+  # configs/masking/coarse_to_fine.yaml. mask_ratio applies only to `random`.
+  mask_strategy: inference_aligned
+  block_size: 4
+  block_probability: 0.5
+  single_token_count: 8
   mask_ratio: 0.4
   loss_type: cosine
   patience: 10

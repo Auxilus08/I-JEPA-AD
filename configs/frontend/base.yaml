@@ -23,7 +23,14 @@ methods:
   patchcore: "PatchCore Baseline"
   mae_reconstruction: "MAE Reconstruction Baseline"
 
+# Predictor checkpoint directories the UI can load, relative to the project root.
+# Notebook 01 writes "baseline"; notebook 02 writes "augmented".
+predictor_checkpoint_dirs:
+  baseline: "checkpoints/predictors"
+  augmented: "checkpoints/predictors_augmented"
+
 defaults:
+  predictor_checkpoints: "baseline"
   category: "bottle"
   method: "adaptive_ijepa"
   anomaly_threshold: 0.50

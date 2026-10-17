@@ -9,7 +9,6 @@ from typing import Any
 
 import numpy as np
 import torch
-import torch.nn.functional as F
 from PIL import Image
 
 from ijepa_ad.caching.cache_schema import CacheExpectations, PreprocessingSpec
@@ -27,15 +26,19 @@ from ijepa_ad.inference import (
     InferenceMode,
     MaskedLatentScorer,
     MaskingSettings,
+    image_score_upper_bound,
     load_masking_settings,
-    load_predictor_checkpoint,
+    load_predictor_checkpoint_with_provenance,
 )
+from ijepa_ad.masking.score_maps import upsample_patch_scores
 from ijepa_ad.predictor.cache_dataset import load_cached_latent_dataset
 
 ENCODER_NAME = "ijepa_vit_g16_in22k_ep44"
 PATCH_SIZE = 16
 NUM_TOKENS = 196
 EMBEDDING_DIM = 1408
+NOMINAL_VAL_FRACTION = 0.1  # mirrors configs/data/mvtec.yaml nominal_split
+NOMINAL_SPLIT_SEED = 0
 
 
 def evaluate_category(
@@ -50,10 +53,19 @@ def evaluate_category(
     masking_settings: MaskingSettings,
     target_fpr: float = 0.05,
     num_thresholds: int = 200,
+    val_fraction: float = NOMINAL_VAL_FRACTION,
+    split_seed: int = NOMINAL_SPLIT_SEED,
 ) -> dict[str, Any]:
-    """Score official test samples and compute image/pixel metrics."""
+    """Score official test samples and compute image/pixel metrics.
+
+    ``val_fraction`` and ``split_seed`` must equal the nominal split used to build
+    the training caches (``configs/data/mvtec.yaml: nominal_split``); a different
+    split fails the cache ``sample_ids`` check instead of being used silently.
+    """
     train_dataset, test_dataset = validate_category_splits(dataset_root, category)
-    nominal_split = split_nominal_train_val(train_dataset, val_fraction=0.1, seed=0)
+    nominal_split = split_nominal_train_val(
+        train_dataset, val_fraction=val_fraction, seed=split_seed
+    )
     val_expected = CacheExpectations(
         category=category,
         split="val",
@@ -82,7 +94,7 @@ def evaluate_category(
     cached_test = load_cached_latent_dataset(
         cache_root, test_expected, samples=test_dataset.samples
     )
-    predictor = load_predictor_checkpoint(
+    predictor, predictor_provenance = load_predictor_checkpoint_with_provenance(
         predictor_path,
         category=category,
         encoder_sha256=encoder_sha256,
@@ -124,11 +136,9 @@ def evaluate_category(
         if device.startswith("cuda"):
             torch.cuda.synchronize(device)
         latencies_ms.append((time.perf_counter() - start_time) * 1000.0)
-        score_map = F.interpolate(
-            result.patch_scores.reshape(1, 1, 14, 14),
-            size=ground_truth.shape,
-            mode="bilinear",
-            align_corners=False,
+        # Raw scores, shared bilinear rule; never per-image normalized (see score_maps).
+        score_map = upsample_patch_scores(
+            result.patch_scores, output_size=ground_truth.shape
         )[0, 0]
 
         labels.append(int(annotation.label != "good"))
@@ -145,6 +155,15 @@ def evaluate_category(
         "category": category,
         "mode": mode,
         "objective": "cosine",
+        "predictor_checkpoint": str(predictor_path),
+        "predictor_provenance": predictor_provenance,
+        "image_score_definition": {
+            "formula": "max(patch_scores) / upper_bound",
+            "upper_bound": image_score_upper_bound(mode, masking_settings["lam"]),
+            "lambda": masking_settings["lam"],
+            "mode": mode,
+            "comparable_across": "runs with identical mode and lambda only",
+        },
         "num_images": len(labels),
         "num_defects": sum(labels),
         "decision_threshold": decision_threshold,
@@ -174,6 +193,8 @@ def evaluate_pilot(
     masking_threshold: float | None = None,
     target_fpr: float = 0.05,
     num_thresholds: int = 200,
+    val_fraction: float = NOMINAL_VAL_FRACTION,
+    split_seed: int = NOMINAL_SPLIT_SEED,
 ) -> dict[str, Any]:
     """Evaluate selected categories with one shared scoring configuration.
 
@@ -201,6 +222,8 @@ def evaluate_pilot(
                 masking_settings=settings,
                 target_fpr=target_fpr,
                 num_thresholds=num_thresholds,
+                val_fraction=val_fraction,
+                split_seed=split_seed,
             )
         )
         if device.startswith("cuda"):
@@ -211,5 +234,6 @@ def evaluate_pilot(
         "device": device,
         "mode": mode,
         "masking_settings": settings,
+        "nominal_split": {"val_fraction": val_fraction, "seed": split_seed},
         "results": results,
     }

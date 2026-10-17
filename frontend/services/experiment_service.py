@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from frontend.services.backend_interface import resolve_predictor_dir
 
 PILOT_MODE_LABELS = {
     "adaptive": "Adaptive I-JEPA",
@@ -34,10 +37,29 @@ def _load_pilot_results(root: Path) -> dict[str, list[dict[str, Any]]]:
     return results
 
 
+def _is_same_file(recorded: object, expected: Path, root: Path) -> bool:
+    if not isinstance(recorded, str) or not recorded:
+        return False
+    path = Path(recorded)
+    path = path if path.is_absolute() else root / path
+    return os.path.normcase(os.path.abspath(path)) == os.path.normcase(
+        os.path.abspath(expected)
+    )
+
+
 def load_category_threshold(
-    category: str, *, mode: str = "adaptive", default: float = 0.5
+    category: str,
+    *,
+    mode: str = "adaptive",
+    default: float = 0.5,
+    predictor_dir: str | Path | None = None,
 ) -> tuple[float, bool]:
-    """Return a category/mode threshold calibrated on nominal validation scores."""
+    """Return a category/mode threshold calibrated on nominal validation scores.
+
+    With ``predictor_dir`` the threshold is used only if its benchmark row records
+    that directory's ``<category>_cosine.pt`` as the evaluated predictor, so a
+    threshold calibrated for one checkpoint set is never applied to another.
+    """
     if mode not in PILOT_MODE_LABELS:
         raise ValueError(f"unsupported calibration mode: {mode!r}")
     root = Path(__file__).resolve().parent.parent.parent
@@ -54,6 +76,16 @@ def load_category_threshold(
             threshold = row.get("decision_threshold")
             if threshold is None:
                 return default, False
+            if predictor_dir is not None and not _is_same_file(
+                row.get("predictor_checkpoint"),
+                resolve_predictor_dir(root, predictor_dir) / f"{category}_cosine.pt",
+                root,
+            ):
+                return default, False
+            if "image_score_definition" not in row:
+                # Calibrated under the pre-normalization score (max / 2, clamped);
+                # not on the scale the live scorer reports now.
+                return default, False
             if (
                 isinstance(threshold, bool)
                 or not isinstance(threshold, int | float)
@@ -66,18 +98,21 @@ def load_category_threshold(
 
 
 def load_training_history(
-    category: str = "bottle", epochs: int = 50
+    category: str = "bottle",
+    epochs: int = 50,
+    predictor_dir: str | Path | None = None,
 ) -> tuple[pd.DataFrame, bool]:
     """Load real training history from a checkpoint or generate illustrative curves.
 
-    Inspects `results/predictor/{category}.pt` (the trainer's saved checkpoint).
+    Inspects `<predictor_dir>/{category}_cosine.pt` (default
+    `checkpoints/predictors`), the trainer's saved checkpoint.
     If found, extracts recorded `history` (epoch, train_loss, val_loss).
 
     Returns:
         tuple[pd.DataFrame, bool]: (DataFrame, is_synthetic_flag)
     """
     root = Path(__file__).resolve().parent.parent.parent
-    ckpt_path = root / "checkpoints" / "predictors" / f"{category}_cosine.pt"
+    ckpt_path = resolve_predictor_dir(root, predictor_dir) / f"{category}_cosine.pt"
 
     if ckpt_path.is_file():
         import torch

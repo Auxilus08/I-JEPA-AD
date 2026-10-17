@@ -204,15 +204,51 @@ Predictor interfaces (`src/ijepa_ad/predictor/`):
   mask token, adds learned positional embeddings, runs a Transformer encoder, and
   projects back to the latent dimension.
 - [`training.py`](src/ijepa_ad/predictor/training.py):
-  `TrainingConfig`, `train_predictor(model, train_dataset, val_dataset, config,
-  checkpoint_path=None) -> TrainingResult`, `build_random_target_mask(...)`, and
-  `main(argv)` for `python -m ijepa_ad.predictor.training`. Training uses AdamW,
-  random target masks, cosine or L2 loss, validation loss tracking, optional early
+  `TrainingConfig` (incl. `mask_strategy`, `block_size`, `block_probability`,
+  `single_token_count`), `train_predictor(model, train_dataset, val_dataset, config,
+  checkpoint_path=None) -> TrainingResult`, `build_random_target_mask(...)`,
+  `build_target_mask(config, ...)` (strategy dispatch), and
+  `main(argv)` for `scripts/train_predictor.py`. Training uses AdamW,
+  random or inference-aligned target masks, cosine or L2 loss, validation loss tracking, optional early
   stopping, and checkpoint saving. The CLI seeds before predictor initialization;
   training requires distinct train/val cache splits, batches lazily, casts cached
   latents to the model dtype, and keeps validation masks fixed across epochs.
+  Validation masks are per sample (`build_validation_target_mask`): each sample's
+  generator is seeded by `sample_mask_seed(seed + 10000, image_id)` (SHA-256, so
+  independent of batch size, order and `PYTHONHASHSEED`); training masks still use
+  one shared generator. Validation losses from different mask strategies are not
+  directly comparable.
   Checkpoints include cache provenance (encoder/checkpoint/preprocessing, latent
-  dtype, and train/val sample IDs). `scripts/train_predictor.py` is a thin wrapper.
+  dtype, and train/val sample IDs) and a `reproducibility` block (seeds, mask
+  strategy, torch/python versions, git commit/dirty flag). A non-finite loss raises.
+  `scripts/train_predictor.py` is a thin wrapper.
+- [`target_masks.py`](src/ijepa_ad/predictor/target_masks.py):
+  `build_inference_aligned_target_mask(batch, tokens, generator, block_size=4,
+  block_probability=0.5, single_token_count=8)` draws, per row, either one of the
+  `CoarseMasker` windows (exactly the coarse inference masks) or isolated
+  non-adjacent single tokens (stand-ins for 1x1 fine masks). Selection only; the
+  predictor overwrites target latents with its mask token, so no target leaks.
+  `sample_mask_seed(base_seed, sample_id, epoch=None)` derives the per-sample
+  validation seed: first 8 bytes of `SHA-256("ijepa-ad/validation-mask/v1|base_seed|
+  epoch-or-'-'|sample_id")`, top bit cleared.
+- [`inference.py`](src/ijepa_ad/inference.py):
+  `load_predictor_checkpoint` (predictor only) wraps
+  `load_predictor_checkpoint_with_provenance` -> `(predictor, {status, mask_strategy,
+  training_config, reproducibility})`; fields a checkpoint lacks stay `None`
+  (`status` = `complete` / `partial` / `legacy`). `image_score_upper_bound(mode, lam)`
+  gives the maximum fused patch score (fixed `2`, dense `2*lam`, adaptive
+  `2*(1+lam)`); `InferenceResult.image_score = raw_image_score / score_upper_bound`
+  in [0, 1] (comparable only within one mode and lambda), where `raw_image_score` is
+  `max(patch_scores)`. `evaluation/runner.py` writes `predictor_provenance`,
+  `predictor_checkpoint` and `image_score_definition` into each category result.
+- [`data/augmentation.py`](src/ijepa_ad/data/augmentation.py):
+  `AugmentationConfig` (+ `fingerprint()`), `load_augmentation_config(path, category)`
+  (defaults + `category_overrides`), `augment_image`, `materialize_augmented_records`
+  (writes `<root>/<category>/train/good/<fingerprint>/*.png`, ids = file SHA-256).
+- [`masking/score_maps.py`](src/ijepa_ad/masking/score_maps.py):
+  `upsample_patch_scores` (raw bilinear, `align_corners=False`; used by evaluation)
+  and `patch_scores_to_heatmap(normalize=True)` (same interpolation + display-only
+  min-max; used by the UI).
 
 Latent cache schema (version 2; v1 lacked `preprocessing.version`). Layout: `<cache_root>/<category>/<split>.pt`, where
 split is `train`, `val` or `test`; default root `data/cache/latents` (gitignored via
@@ -298,6 +334,12 @@ batch.latents          # Tensor[2, 196, 1408], in requested order
   the preprocessing code, or the encoder.
 
 ## 3. Runtime Flow
+
+### Notebook predictor workflows
+1. `notebooks/01_train_predictor.ipynb` loads predictor settings, validates each MVTec category, and reuses or builds nominal `train`/`val` latent caches through `run_cache_generation`.
+2. It constructs `LatentTransformerPredictor` from cache dimensions and config architecture fields, then calls `train_predictor` with early stopping and writes the best model to `checkpoints/predictors/<category>_<loss>.pt`.
+3. `notebooks/02_augment_and_train_predictor.ipynb` splits original nominal training images first (using `nominal_split` from `configs/data/mvtec.yaml`, independent of the augmentation seed), augments only the training side in image space via `materialize_augmented_records` (fingerprinted directory, content-hash ids, capsule never mirrored), encodes the resulting records into `data/cache/latents_augmented`, and writes augmented-run checkpoints under `checkpoints/predictors_augmented`.
+4. Both checkpoint payloads retain model configuration, training configuration, a `reproducibility` block, loss history, selected epoch, and train/validation cache provenance; evaluation copies the training and reproducibility metadata into its result JSON. The official test split is evaluation-only.
 Before training or inference, an entrypoint calls `set_seed(seed)` once. Runtime
 blocks can be wrapped as `with profile_peak_vram("stage"):` and all run output is
 sent through the logger returned by `setup_logging()`.
@@ -353,7 +395,9 @@ Person 2 training flow after real `train` and `val` caches exist:
 4. Construct `LatentTransformerPredictor(PredictorConfig(...))`.
 5. Run `train_predictor(model, train_dataset, val_dataset, TrainingConfig(...),
    checkpoint_path=...)`, or use `scripts/train_predictor.py`.
-6. Training samples random target masks, predicts all tokens, computes loss only on
+6. Training samples target masks via `build_target_mask` (`inference_aligned` in
+   `configs/predictor/base.yaml`: one coarse window or isolated tokens; the legacy
+   `random` strategy is the dataclass default), predicts all tokens, computes loss only on
    masked tokens, validates on `val`, restores the best state, and writes a checkpoint
    if requested. Predictor code does not call the encoder or parse cache `.pt` payloads
    directly.
@@ -376,6 +420,11 @@ Preprocessing here uses a deterministic full-image resize instead, so no border
 region is cropped away. See `DECISIONS.md`, 2026-10-10 "Deterministic I-JEPA
 preprocessing".
 
+Predictor training masks follow the inference masks (coarse 4x4 windows and single
+tokens) instead of scattered 40% masks; the PRD does not specify training masks. See
+`DECISIONS.md`, 2026-10-17 "Inference-aligned predictor training masks". The display
+heatmap is bilinear like the PRD; only its per-image min-max scaling is display-only
+(`DECISIONS.md`, 2026-10-17 "One bilinear upsampling rule").
 
 ## 5. Frontend and Visualization Architecture (Person 4)
 
@@ -398,7 +447,7 @@ frontend.services.backend_interface.run_inference(...)
         ▼
 Returns Result Schema:
 {
-    "image_score": float,
+    "image_score": float,   # in [0, 1]; max patch score / mode-and-lambda maximum
     "pixel_heatmap": ndarray [H, W],
     "overlay": PIL.Image | ndarray,
     "detected_regions": list[dict],

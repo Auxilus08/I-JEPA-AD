@@ -9,5 +9,6 @@ __pycache__/
 results/*
 !results/.gitkeep
 /data/
-checkpoints/
+checkpoints/IN22K-vit.g.16-600e.pth.tar
 external/ijepa
+dataset/
