@@ -13,6 +13,15 @@ results and limitations.
 
 ## Development
 
+To install the project and dependencies used by the notebooks:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+For the CUDA-enabled PyTorch setup, follow the
+[GPU runbook](docs/ENCODER_VITG16_CUDA_RUNBOOK.md).
+
 ```bash
 python -m pip install -e ".[dev]"
 pre-commit install
