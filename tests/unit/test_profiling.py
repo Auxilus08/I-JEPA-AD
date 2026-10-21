@@ -6,7 +6,8 @@ from typing import Any
 from ijepa_ad.utils.profiling import profile_peak_vram
 
 
-def test_profile_peak_vram_is_safe_without_cuda(caplog: Any) -> None:
+def test_profile_peak_vram_is_safe_without_cuda(monkeypatch: Any, caplog: Any) -> None:
+    monkeypatch.setattr("ijepa_ad.utils.profiling._load_torch", lambda: None)
     logger = logging.getLogger("profiling-test")
     logger.setLevel(logging.INFO)
     with profile_peak_vram("cpu-block", logger=logger) as result:

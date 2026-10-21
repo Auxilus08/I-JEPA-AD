@@ -265,7 +265,12 @@ def test_draw_detected_regions() -> None:
 def test_training_and_benchmark_services() -> None:
     """Verify training curves and benchmark summaries return valid DataFrames."""
     df_train, is_synth_train = load_training_history(category="bottle", epochs=30)
-    assert len(df_train) == (30 if is_synth_train else 100)
+    if is_synth_train:
+        assert len(df_train) == 30
+    else:
+        # Real histories end where early stopping ended training (at most 100 epochs).
+        assert 1 <= len(df_train) <= 100
+        assert list(df_train["Epoch"]) == list(range(1, len(df_train) + 1))
     assert "Train Loss" in df_train.columns
     assert "Val Loss" in df_train.columns
     assert isinstance(is_synth_train, bool)
@@ -383,7 +388,8 @@ def fake_project(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Pa
     class StubEncoder:
         def encode(self, batch: torch.Tensor) -> torch.Tensor:
             generator = torch.Generator().manual_seed(0)
-            return torch.randn(batch.shape[0], 196, 1408, generator=generator)
+            latents = torch.randn(batch.shape[0], 196, 1408, generator=generator)
+            return latents.to(batch.device)
 
     monkeypatch.setattr(backend_interface, "_project_root", lambda: tmp_path)
     monkeypatch.setattr(

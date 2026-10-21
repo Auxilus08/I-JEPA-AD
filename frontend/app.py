@@ -347,7 +347,7 @@ with st.sidebar:
             PyTorch {"available" if PYTORCH_AVAILABLE else "not found"}
         </div>
         <div class='status-row'>
-            <span class='{"dot-ok" if has_checkpoints else "dot-warn"}'></span>
+            <span class='{"dot-ok" if has_encoder_checkpoint else "dot-warn"}'></span>
             Encoder checkpoint {encoder_status}
         </div>
         <div class='status-row'>
