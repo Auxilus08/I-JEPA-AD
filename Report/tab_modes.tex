@@ -1,0 +1,13 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccc}
+\hline
+ & \multicolumn{3}{c}{\textbf{Pixel AUROC}} & \multicolumn{3}{c}{\textbf{AUPRO}} & \textbf{Masks} \\
+\textbf{Policy} & B & C & H & B & C & H & \textbf{(mean)} \\
+\hline
+Fixed (coarse only)  & .930 & .685 & .907 & .766 & .098 & .578 & 16.0 \\
+Adaptive, $\tau{=}0.5$ & .930 & .685 & .907 & .766 & .098 & .577 & 16.1 \\
+Adaptive, cal.\ $\tau$ & .926 & .700 & .923 & .732 & .103 & .566 & 34.7 \\
+Dense (196 masks)    & .928 & .706 & .909 & .762 & .111 & .584 & 196 \\
+\hline
+\end{tabular}%
+}

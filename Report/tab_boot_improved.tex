@@ -1,0 +1,15 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc}
+\hline
+\textbf{Comparison (new vs reference)} & \textbf{Bottle} & \textbf{Capsule} & \textbf{Hazelnut} \\
+\hline
+Final layer + z-score (top-3) vs original (max) & +0.073 [+0.019, +0.152]\textsuperscript{*} & +0.150 [$-$0.045, +0.356] & +0.137 [+0.054, +0.226]\textsuperscript{*} \\
+Layer 32 + z-score (top-3) vs original (max) & +0.075 [+0.021, +0.153]\textsuperscript{*} & +0.246 [+0.049, +0.457]\textsuperscript{*} & +0.191 [+0.107, +0.284]\textsuperscript{*} \\
+Layer 32 + z-score vs final layer + z-score (top-3) & +0.002 [+0.000, +0.007] & +0.095 [+0.038, +0.150]\textsuperscript{*} & +0.054 [+0.017, +0.101]\textsuperscript{*} \\
+Layer 32, $1-\cos$ vs original (max) & +0.034 [$-$0.024, +0.110] & +0.021 [$-$0.075, +0.114] & +0.144 [+0.061, +0.239]\textsuperscript{*} \\
+Layer 32 Mahalanobis vs layer 32 $1-\cos$ (max) & +0.033 [+0.004, +0.078]\textsuperscript{*} & +0.057 [$-$0.123, +0.259] & +0.013 [$-$0.031, +0.068] \\
+Layer 32 Mahalanobis (max) vs layer 32 z-score (top-3) & $-$0.008 [$-$0.029, +0.002] & $-$0.167 [$-$0.282, $-$0.057]\textsuperscript{*} & $-$0.034 [$-$0.067, $-$0.007]\textsuperscript{*} \\
+Layer 32 Mahalanobis (max) vs original (max) & +0.067 [+0.012, +0.144]\textsuperscript{*} & +0.079 [$-$0.134, +0.303] & +0.157 [+0.076, +0.254]\textsuperscript{*} \\
+\hline
+\end{tabular}%
+}

@@ -1,0 +1,31 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccc}
+\hline
+\textbf{Category} & \textbf{Method} & \textbf{Image AUROC} & \textbf{Image AUROC (top-5)} & \textbf{Pixel AUROC} & \textbf{AUPRO} & \textbf{Masks/img} \\
+\hline
+\multirow{4}{*}{Bottle}
+ & I-JEPA-AD (default gate)        & 0.925 & 0.956 & 0.930 & 0.766 & 16.2 \\
+ & I-JEPA-AD (calibrated gate)     & 0.951 & 0.955 & 0.926 & 0.732 & 58.2 \\
+ & I-JEPA-AD (augmented, default)  & 0.886 & 0.966 & 0.939 & 0.789 & 16.0 \\
+ & PatchCore-style reference       & \textbf{0.999} & \textbf{1.000} & \textbf{0.973} & \textbf{0.859} & -- \\
+\hline
+\multirow{4}{*}{Capsule}
+ & I-JEPA-AD (default gate)        & 0.522 & 0.528 & 0.684 & 0.098 & 16.0 \\
+ & I-JEPA-AD (calibrated gate)     & 0.523 & 0.544 & 0.700 & 0.103 & 23.0 \\
+ & I-JEPA-AD (augmented, default)  & 0.398 & 0.452 & 0.671 & 0.098 & 16.0 \\
+ & PatchCore-style reference       & \textbf{0.805} & \textbf{0.850} & \textbf{0.916} & \textbf{0.513} & -- \\
+\hline
+\multirow{4}{*}{Hazelnut}
+ & I-JEPA-AD (default gate)        & 0.802 & 0.930 & 0.907 & 0.577 & 16.1 \\
+ & I-JEPA-AD (calibrated gate)     & 0.811 & 0.890 & 0.923 & 0.566 & 22.9 \\
+ & I-JEPA-AD (augmented, default)  & 0.750 & 0.861 & 0.903 & 0.600 & 16.0 \\
+ & PatchCore-style reference       & \textbf{0.988} & \textbf{0.987} & \textbf{0.979} & \textbf{0.868} & -- \\
+\hline
+\multirow{4}{*}{Mean}
+ & I-JEPA-AD (default gate)        & 0.750 & 0.805 & 0.840 & 0.480 & 16.1 \\
+ & I-JEPA-AD (calibrated gate)     & 0.762 & 0.796 & 0.850 & 0.467 & 34.7 \\
+ & I-JEPA-AD (augmented, default)  & 0.678 & 0.760 & 0.838 & 0.496 & 16.0 \\
+ & PatchCore-style reference       & \textbf{0.930} & \textbf{0.946} & \textbf{0.956} & \textbf{0.747} & -- \\
+\hline
+\end{tabular}%
+}

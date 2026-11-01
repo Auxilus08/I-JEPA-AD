@@ -22,27 +22,32 @@
 
 \author{\IEEEauthorblockN{1\textsuperscript{st} Aryan Jawanjal}
 \IEEEauthorblockA{\textit{Dept.\ of Computer Science and Engineering} \\
-\textit{[Institution name]}\\
-\mbox{[City], [Country]}\\
+\textit{Ramdeobaba University}\\
+\mbox{Nagpur, India}\\
 aryanjawanjal8@gmail.com}
 \and
 \IEEEauthorblockN{2\textsuperscript{nd} Akshat Tiwari}
 \IEEEauthorblockA{\textit{Dept.\ of Computer Science and Engineering} \\
-\textit{[Institution name]}\\
-\mbox{[City], [Country]}\\
+\textit{Ramdeobaba University}\\
+\mbox{Nagpur, India}\\
 tiwariar\_10@rknec.edu}
 \and
 \IEEEauthorblockN{3\textsuperscript{rd} Arnav Milmile}
 \IEEEauthorblockA{\textit{Dept.\ of Computer Science and Engineering} \\
-\textit{[Institution name]}\\
-\mbox{[City], [Country]}\\
+\textit{Ramdeobaba University}\\
+\mbox{Nagpur, India}\\
 arnavmilmile1@gmail.com}
 \and
 \IEEEauthorblockN{4\textsuperscript{th} Aashutosh Dubey}
 \IEEEauthorblockA{\textit{Dept.\ of Computer Science and Engineering} \\
-\textit{[Institution name]}\\
-\mbox{[City], [Country]}\\
+\textit{Ramdeobaba University}\\
+\mbox{Nagpur, India}\\
 kailashdubey@outlook.com}
+\and
+\IEEEauthorblockN{Dr. Sunita G. Rawat}
+\IEEEauthorblockA{\textit{Project Guide} \\
+\textit{Ramdeobaba University}\\
+\mbox{Nagpur, India}}
 }
 
 \maketitle
@@ -337,7 +342,7 @@ The only statistically supported improvement is the top-5 mean score on hazelnut
 \section{Validation-Selected Improvements}\label{sec:improve}
 The calibration of Section~\ref{sec:calib} used only nominal validation images, which contain no defects, so nothing could be chosen for \emph{detection} quality. This section adds a labelled validation set and uses it to choose the scoring settings and the encoder layer without reading the test split.
 
-\textbf{Synthetic-defect validation set.} For every nominal validation image we generate four defects with a fixed seed, alternating CutPaste scars (a jittered, rotated patch cut from elsewhere on the object) and DRAEM-style Perlin-noise texture blends. Defects stay on the object and cover 0.3--4\,\% of the image; textures come from nominal training images. This gives 84, 88 and 156 synthetic images for bottle, capsule and hazelnut with exact masks, so image AUROC, pixel AUROC and AUPRO can be measured. Official test images are never read.
+\textbf{Synthetic-defect validation set.} For every nominal validation image we generate four defects with a fixed seed, alternating CutPaste scars \cite{li2021cutpaste} (a jittered, rotated patch cut from elsewhere on the object) and DRAEM-style Perlin-noise texture blends \cite{zavrtanik2021draem}. Defects stay on the object and cover 0.3--4\,\% of the image; textures come from nominal training images. This gives 84, 88 and 156 synthetic images for bottle, capsule and hazelnut with exact masks, so image AUROC, pixel AUROC and AUPRO can be measured. Official test images are never read.
 
 \textbf{Selection protocol (declared before any result was seen).} Statistics that are fitted (per-position z-score, Mahalanobis covariance, gate quantiles) are cross-fitted over three folds of the clean validation images, so no validation image is used both for fitting and for evaluation. Settings are chosen greedily in a fixed order (score family, smoothing $\sigma$, image-score $k$, fusion $\lambda$, gate $\tau$) with one criterion, the mean over categories of the average of image AUROC, pixel AUROC and AUPRO, and one global choice for all categories. Options within 0.005 of the best are treated as tied and the earlier (simpler) option wins. For the final-layer predictor this selected a per-token-position z-score of the patch score (each of the 196 positions normalised with the mean and standard deviation of nominal validation scores), $\sigma{=}0$, $k{=}3$, $\lambda{=}1$ and the default gate. After the selection was saved, the proxy's ranking of eight scoring variants agreed with the test split (mean Spearman 0.74 for image AUROC with the max score, 0.86 with top-5, 0.84 for pixel AUROC, 0.94 for AUPRO) but only weakly for capsule's max-score image AUROC (0.42).
 
@@ -390,6 +395,7 @@ Code, configurations, result tables and all figures are in the project repositor
 \bibitem{defard2021padim} T. Defard, A. Setkov, A. Loesch, and R. Audigier, ``PaDiM: A patch distribution modeling framework for anomaly detection and localization,'' in \emph{Int. Conf. Pattern Recognit. (ICPR) Workshops}, 2021, pp. 475--489.
 \bibitem{zavrtanik2021draem} V. Zavrtanik, M. Kristan, and D. Sko\v{c}aj, ``DRAEM --- a discriminatively trained reconstruction embedding for surface anomaly detection,'' in \emph{Proc. IEEE/CVF Int. Conf. Comput. Vis. (ICCV)}, 2021, pp. 8330--8339.
 \bibitem{zavrtanik2021inpainting} V. Zavrtanik, M. Kristan, and D. Sko\v{c}aj, ``Reconstruction by inpainting for visual anomaly detection,'' \emph{Pattern Recognit.}, vol. 112, art. 107706, 2021.
+\bibitem{li2021cutpaste} C.-L. Li, K. Sohn, J. Yoon, and T. Pfister, ``CutPaste: Self-supervised learning for anomaly detection and localization,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2021, pp. 9664--9674.
 \bibitem{batzner2024efficientad} K. Batzner, L. Heckler, and R. K\"onig, ``EfficientAD: Accurate visual anomaly detection at millisecond-level latencies,'' in \emph{Proc. IEEE/CVF Winter Conf. Appl. Comput. Vis. (WACV)}, 2024, pp. 128--138.
 \bibitem{akcay2022anomalib} S. Akcay, D. Ameln, A. Vaidya, B. Lakshmanan, N. Ahuja, and U. Genc, ``Anomalib: A deep learning library for anomaly detection,'' in \emph{Proc. IEEE Int. Conf. Image Process. (ICIP)}, 2022, pp. 1706--1710.
 \bibitem{lecun2022path} Y. LeCun, ``A path towards autonomous machine intelligence, version 0.9.2,'' OpenReview, 2022.

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.11.1)  1 NOV 2026 15:01
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (MiKTeX 25.12) (preloaded format=pdflatex 2026.11.1)  1 NOV 2026 16:06
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -301,13 +301,13 @@ Package epstopdf-base Info: Redefining graphics rule for `.eps' on input line 4
 fg
 File: epstopdf-sys.cfg 2021/03/18 v2.0 Configuration of epstopdf for MiKTeX
 ))
-LaTeX Font Info:    Calculating math sizes for size <11> on input line 48.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 48.
+LaTeX Font Info:    Calculating math sizes for size <11> on input line 53.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 53.
 
  (C:\Users\aryan\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 48.
+LaTeX Font Info:    Trying to load font information for U+msb on input line 53.
 
 
 (C:\Users\aryan\AppData\Local\Programs\MiKTeX\tex/latex/amsfonts\umsb.fd
@@ -323,10 +323,10 @@ ryan/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/base/8r.enc}
 <figures/architecture.png, id=10, 417.7206pt x 203.5605pt>
 File: figures/architecture.png Graphic file (type png)
 <use figures/architecture.png>
-Package pdftex.def Info: figures/architecture.png  used on input line 88.
+Package pdftex.def Info: figures/architecture.png  used on input line 93.
 (pdftex.def)             Requested size: 252.0pt x 122.80194pt.
  [2 <./figures/architecture.png>]
-Underfull \hbox (badness 1527) in paragraph at lines 147--148
+Underfull \hbox (badness 1527) in paragraph at lines 152--153
 []\OT1/ptm/b/n/10 Training. \OT1/ptm/m/n/10 One pre-dic-tor is trained per cat-
 e-gory with
  []
@@ -335,31 +335,31 @@ e-gory with
 File: figures/reference_comparison.png Graphic file (type png)
 <use figures/reference_comparison.png>
 Package pdftex.def Info: figures/reference_comparison.png  used on input line 2
-03.
+08.
 (pdftex.def)             Requested size: 252.0pt x 153.66542pt.
 [3 <./figures/reference_comparison.png>]
 <figures/heatmaps_composite.png, id=28, 327.624pt x 156.585pt>
 File: figures/heatmaps_composite.png Graphic file (type png)
 <use figures/heatmaps_composite.png>
-Package pdftex.def Info: figures/heatmaps_composite.png  used on input line 236
+Package pdftex.def Info: figures/heatmaps_composite.png  used on input line 241
 .
 (pdftex.def)             Requested size: 474.71906pt x 226.90623pt.
 <figures/heatmap_hazelnut_calibrated.png, id=29, 526.6074pt x 159.9576pt>
 File: figures/heatmap_hazelnut_calibrated.png Graphic file (type png)
 <use figures/heatmap_hazelnut_calibrated.png>
 Package pdftex.def Info: figures/heatmap_hazelnut_calibrated.png  used on input
- line 245.
+ line 250.
 (pdftex.def)             Requested size: 490.19843pt x 148.90057pt.
 <figures/latency_e2e.png, id=30, 236.8047pt x 173.6889pt>
 File: figures/latency_e2e.png Graphic file (type png)
 <use figures/latency_e2e.png>
-Package pdftex.def Info: figures/latency_e2e.png  used on input line 276.
+Package pdftex.def Info: figures/latency_e2e.png  used on input line 281.
 (pdftex.def)             Requested size: 201.60077pt x 147.87213pt.
  [4]
 <figures/image_auroc_vs_k.png, id=37, 1076.3412pt x 272.217pt>
 File: figures/image_auroc_vs_k.png Graphic file (type png)
 <use figures/image_auroc_vs_k.png>
-Package pdftex.def Info: figures/image_auroc_vs_k.png  used on input line 310.
+Package pdftex.def Info: figures/image_auroc_vs_k.png  used on input line 315.
 (pdftex.def)             Requested size: 474.71906pt x 120.06244pt.
 
 Underfull \vbox (badness 10000) has occurred while \output is active []
@@ -377,7 +377,7 @@ Underfull \vbox (badness 6157) has occurred while \output is active []
 
  [8]
 LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 3
-82.
+87.
 
 (C:\Users\aryan\AppData\Local\Programs\MiKTeX\tex/latex/psnfss\ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
@@ -400,10 +400,10 @@ L3 programming layer <2025-12-24>
  ***********
  ) 
 Here is how much of TeX's memory you used:
- 4237 strings out of 467871
- 68048 string characters out of 5418376
- 503214 words of memory out of 5000000
- 33067 multiletter control sequences out of 15000+600000
+ 4238 strings out of 467871
+ 68064 string characters out of 5418376
+ 503422 words of memory out of 5000000
+ 33068 multiletter control sequences out of 15000+600000
  678468 words of font info for 136 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
  57i,12n,65p,2322b,348s stack positions out of 10000i,1000n,20000p,200000b,200000s
@@ -425,7 +425,7 @@ rw/times/utmb8a.pfb><C:/Users/aryan/AppData/Local/Programs/MiKTeX/fonts/type1/u
 rw/times/utmbi8a.pfb><C:/Users/aryan/AppData/Local/Programs/MiKTeX/fonts/type1/
 urw/times/utmr8a.pfb><C:/Users/aryan/AppData/Local/Programs/MiKTeX/fonts/type1/
 urw/times/utmri8a.pfb>
-Output written on main.pdf (9 pages, 1856696 bytes).
+Output written on main.pdf (9 pages, 1857228 bytes).
 PDF statistics:
  125 PDF objects out of 1000 (max. 8388607)
  0 named destinations out of 1000 (max. 500000)

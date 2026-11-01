@@ -1,0 +1,39 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llccccc}
+\hline
+\textbf{Category} & \textbf{Method} & \textbf{Img AUROC (max)} & \textbf{Img AUROC (top-3)} & \textbf{Pixel AUROC} & \textbf{AUPRO} & \textbf{Masks/img} \\
+\hline
+\multirow{6}{*}{Bottle}
+ & Original baseline (final layer, $1-\cos$) & 0.925 & 0.952 & 0.930 & 0.766 & 16.2 \\
+ & + position z-score (final layer) & 0.993 & 0.998 & 0.952 & 0.831 & 16.2 \\
+ & Layer 32, $1-\cos$ & 0.959 & 0.975 & 0.979 & 0.904 & 16.2 \\
+ & \textbf{Layer 32 + position z-score} & 0.994 & 0.999 & 0.966 & 0.871 & 16.2 \\
+ & Layer 32 + Mahalanobis $d{=}128$\textsuperscript{a} & 0.991 & 0.998 & 0.983 & 0.928 & 16.2 \\
+ & kNN reference, layer 32\textsuperscript{b} & 1.000 & 1.000 & 0.987 & 0.937 & -- \\
+\hline
+\multirow{6}{*}{Capsule}
+ & Original baseline (final layer, $1-\cos$) & 0.522 & 0.512 & 0.684 & 0.098 & 16.0 \\
+ & + position z-score (final layer) & 0.622 & 0.672 & 0.901 & 0.508 & 16.0 \\
+ & Layer 32, $1-\cos$ & 0.543 & 0.660 & 0.836 & 0.309 & 16.0 \\
+ & \textbf{Layer 32 + position z-score} & 0.721 & 0.767 & 0.931 & 0.666 & 16.0 \\
+ & Layer 32 + Mahalanobis $d{=}128$\textsuperscript{a} & 0.600 & 0.647 & 0.956 & 0.720 & 16.0 \\
+ & kNN reference, layer 32\textsuperscript{b} & 0.909 & 0.909 & 0.962 & 0.771 & -- \\
+\hline
+\multirow{6}{*}{Hazelnut}
+ & Original baseline (final layer, $1-\cos$) & 0.802 & 0.897 & 0.907 & 0.577 & 16.1 \\
+ & + position z-score (final layer) & 0.864 & 0.939 & 0.969 & 0.812 & 16.1 \\
+ & Layer 32, $1-\cos$ & 0.946 & 0.989 & 0.986 & 0.877 & 16.6 \\
+ & \textbf{Layer 32 + position z-score} & 0.981 & 0.993 & 0.989 & 0.901 & 16.6 \\
+ & Layer 32 + Mahalanobis $d{=}128$\textsuperscript{a} & 0.960 & 0.969 & 0.987 & 0.894 & 16.6 \\
+ & kNN reference, layer 32\textsuperscript{b} & 0.999 & 1.000 & 0.995 & 0.941 & -- \\
+\hline
+\multirow{6}{*}{Mean}
+ & Original baseline (final layer, $1-\cos$) & 0.750 & 0.787 & 0.840 & 0.480 & 16.1 \\
+ & + position z-score (final layer) & 0.826 & 0.870 & 0.941 & 0.717 & 16.1 \\
+ & Layer 32, $1-\cos$ & 0.816 & 0.875 & 0.934 & 0.697 & 16.3 \\
+ & \textbf{Layer 32 + position z-score} & 0.899 & 0.920 & 0.962 & 0.813 & 16.3 \\
+ & Layer 32 + Mahalanobis $d{=}128$\textsuperscript{a} & 0.850 & 0.871 & 0.975 & 0.847 & 16.3 \\
+ & kNN reference, layer 32\textsuperscript{b} & 0.969 & 0.970 & 0.981 & 0.883 & -- \\
+\hline
+\end{tabular}%
+}

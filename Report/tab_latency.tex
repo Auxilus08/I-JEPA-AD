@@ -1,0 +1,13 @@
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccc}
+\hline
+\textbf{Policy} & \textbf{End-to-end (ms)} & \textbf{P95 (ms)} & \textbf{Scoring only B/C/H (ms)} \\
+\hline
+Encoder only (batch 1) & $87.5\pm5.4$  & 100.5 & -- \\
+Fixed    & $124.9\pm3.5$  & 130.2 & 18.1 / 17.5 / 17.5 \\
+Adaptive & $133.8\pm4.4$  & 141.3 & 30.4 / 20.6 / 21.1 \\
+Dense    & $349.8\pm10.1$ & 367.9 & 214.4 / 216.7 / 238.1 \\
+\hline
+\multicolumn{4}{l}{Peak GPU memory: 4078~MB (all three policies); encoder weights 3939~MB.}
+\end{tabular}%
+}
