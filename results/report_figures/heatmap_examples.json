@@ -1,0 +1,83 @@
+[
+  {
+    "category": "bottle",
+    "role": "Normal",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\bottle\\test\\good\\000.png",
+    "defect_type": "good",
+    "gt_area_fraction": 0.0,
+    "raw_image_score": 0.4963255524635315,
+    "fine_masks": 0
+  },
+  {
+    "category": "bottle",
+    "role": "Subtle defect (10th pct. GT area)",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\bottle\\test\\broken_small\\014.png",
+    "defect_type": "broken_small",
+    "gt_area_fraction": 0.017958024691358026,
+    "raw_image_score": 0.6378614902496338,
+    "fine_masks": 0
+  },
+  {
+    "category": "bottle",
+    "role": "Pronounced defect (90th pct. GT area)",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\bottle\\test\\contamination\\012.png",
+    "defect_type": "contamination",
+    "gt_area_fraction": 0.1513679012345679,
+    "raw_image_score": 0.5469875335693359,
+    "fine_masks": 0
+  },
+  {
+    "category": "capsule",
+    "role": "Normal",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\capsule\\test\\good\\000.png",
+    "defect_type": "good",
+    "gt_area_fraction": 0.0,
+    "raw_image_score": 0.5804218649864197,
+    "fine_masks": 0
+  },
+  {
+    "category": "capsule",
+    "role": "Subtle defect (10th pct. GT area)",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\capsule\\test\\poke\\002.png",
+    "defect_type": "poke",
+    "gt_area_fraction": 0.001577,
+    "raw_image_score": 0.7483682036399841,
+    "fine_masks": 0
+  },
+  {
+    "category": "capsule",
+    "role": "Pronounced defect (90th pct. GT area)",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\capsule\\test\\faulty_imprint\\005.png",
+    "defect_type": "faulty_imprint",
+    "gt_area_fraction": 0.03924,
+    "raw_image_score": 0.6693305969238281,
+    "fine_masks": 0
+  },
+  {
+    "category": "hazelnut",
+    "role": "Normal",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\hazelnut\\test\\good\\000.png",
+    "defect_type": "good",
+    "gt_area_fraction": 0.0,
+    "raw_image_score": 0.6409460306167603,
+    "fine_masks": 0
+  },
+  {
+    "category": "hazelnut",
+    "role": "Subtle defect (10th pct. GT area)",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\hazelnut\\test\\cut\\002.png",
+    "defect_type": "cut",
+    "gt_area_fraction": 0.006188392639160156,
+    "raw_image_score": 0.6865494847297668,
+    "fine_masks": 0
+  },
+  {
+    "category": "hazelnut",
+    "role": "Pronounced defect (90th pct. GT area)",
+    "image": "C:\\Users\\aryan\\OneDrive\\Desktop\\7 sem\\I-JEPA-AD\\data\\raw\\mvtec_ad\\hazelnut\\test\\crack\\001.png",
+    "defect_type": "crack",
+    "gt_area_fraction": 0.0633993148803711,
+    "raw_image_score": 0.8436969518661499,
+    "fine_masks": 0
+  }
+]

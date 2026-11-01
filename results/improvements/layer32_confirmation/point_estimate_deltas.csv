@@ -1,0 +1,19 @@
+category,comparison,delta_pixel_auroc,delta_aupro,delta_masks_per_image,delta_scorer_ms
+bottle,"1 PRIMARY: scoring change only (layer 32, same windows)",0.0038428625880381206,0.023494088608727592,0.0,0.7166277129113325
+bottle,2a vs notebook 11 as reported (family AND k differ: z-score top-3),0.01696298736328894,0.05642082412193128,0.0,0.7166277129113325
+bottle,"2b vs notebook 11, same score k=3 (family differs; selected top-3 is a diagnostic)",0.01696298736328894,0.05642082412193128,0.0,0.7166277129113325
+bottle,"2c vs notebook 11, same score k=1 (family differs)",0.01696298736328894,0.05642082412193128,0.0,0.7166277129113325
+bottle,3 HISTORICAL: vs original baseline (layer + predictor + scoring all differ),0.05342876783259376,0.162057246641914,0.0,-0.4371253006351026
+bottle,"context: layer effect alone, layer 32 cosine vs original",0.04958590524455564,0.13856315803318642,0.0,-1.1537530135464351
+capsule,"1 PRIMARY: scoring change only (layer 32, same windows)",0.12070593362233961,0.4109975301633203,0.0,2.793464388532538
+capsule,2a vs notebook 11 as reported (family AND k differ: z-score top-3),0.025700880492526834,0.053747818881551,0.0,2.793464388532538
+capsule,"2b vs notebook 11, same score k=3 (family differs; selected top-3 is a diagnostic)",0.025700880492526834,0.053747818881551,0.0,2.793464388532538
+capsule,"2c vs notebook 11, same score k=1 (family differs)",0.025700880492526834,0.053747818881551,0.0,2.793464388532538
+capsule,3 HISTORICAL: vs original baseline (layer + predictor + scoring all differ),0.27193849163201766,0.6219478297175116,0.0,2.75754772177827
+capsule,"context: layer effect alone, layer 32 cosine vs original",0.15123255800967805,0.2109502995541913,0.0,-0.03591666675426808
+hazelnut,"1 PRIMARY: scoring change only (layer 32, same windows)",0.0012897046687571079,0.01699302001183567,0.0,0.48874999735166114
+hazelnut,2a vs notebook 11 as reported (family AND k differ: z-score top-3),-0.0014376573255856506,-0.00751683798984748,0.0,0.48874999735166114
+hazelnut,"2b vs notebook 11, same score k=3 (family differs; selected top-3 is a diagnostic)",-0.0014376573255856506,-0.00751683798984748,0.0,0.48874999735166114
+hazelnut,"2c vs notebook 11, same score k=1 (family differs)",-0.0014376573255856506,-0.00751683798984748,0.0,0.48874999735166114
+hazelnut,3 HISTORICAL: vs original baseline (layer + predictor + scoring all differ),0.08061813624194636,0.31635820557813565,0.4363636363636374,0.6388618166304454
+hazelnut,"context: layer effect alone, layer 32 cosine vs original",0.07932843157318925,0.2993651855663,0.4363636363636374,0.15011181927878425

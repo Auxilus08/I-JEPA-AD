@@ -1,0 +1,10 @@
+category,change vs original,delta_image_auroc,ci95_low,ci95_high,verdict
+bottle,"gate only (calibrated tau, max)",0.026190476190476097,-0.03650793650793649,0.09682539682539681,inconclusive (CI contains 0)
+bottle,top-5 only (default tau),0.031746031746031744,-0.004761904761904745,0.07777777777777772,inconclusive (CI contains 0)
+bottle,both (primary),0.030158730158730163,-0.026210317460317475,0.09684523809523818,inconclusive (CI contains 0)
+capsule,"gate only (calibrated tau, max)",0.0011966493817311408,-0.11371160749900276,0.1069106501794974,inconclusive (CI contains 0)
+capsule,top-5 only (default tau),0.005983246908655815,-0.12606701236537698,0.15317112086158752,inconclusive (CI contains 0)
+capsule,both (primary),0.021938571998404433,-0.12772237734343841,0.1802951735141603,inconclusive (CI contains 0)
+hazelnut,"gate only (calibrated tau, max)",0.00928571428571423,-0.05501785714285719,0.06929464285714285,inconclusive (CI contains 0)
+hazelnut,top-5 only (default tau),0.12821428571428573,0.0675,0.1982321428571428,improves
+hazelnut,both (primary),0.08750000000000002,0.00641964285714288,0.1714464285714286,improves

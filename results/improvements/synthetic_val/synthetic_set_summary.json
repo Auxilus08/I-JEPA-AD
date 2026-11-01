@@ -1,0 +1,48 @@
+{
+  "base_images": "nominal validation images only",
+  "by_kind": {
+    "bottle": {
+      "cutpaste": 42,
+      "perlin": 42
+    },
+    "capsule": {
+      "cutpaste": 44,
+      "perlin": 44
+    },
+    "hazelnut": {
+      "cutpaste": 78,
+      "perlin": 78
+    }
+  },
+  "counts": {
+    "bottle": {
+      "clean_validation": 21,
+      "synthetic": 84
+    },
+    "capsule": {
+      "clean_validation": 22,
+      "synthetic": 88
+    },
+    "hazelnut": {
+      "clean_validation": 39,
+      "synthetic": 156
+    }
+  },
+  "encoder_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+  "generator_config": {
+    "anomalies_per_image": 4,
+    "max_area_fraction": 0.04,
+    "max_aspect_ratio": 6.0,
+    "max_attempts": 12,
+    "max_opacity": 1.0,
+    "max_rotation_degrees": 45.0,
+    "min_area_fraction": 0.003,
+    "min_area_realised": 0.5,
+    "min_opacity": 0.4,
+    "min_visible_difference": 10.0,
+    "seed": 0
+  },
+  "generator_fingerprint": "46c947cb99e1faf4",
+  "test_split_used": false,
+  "texture_sources": "nominal training images only"
+}

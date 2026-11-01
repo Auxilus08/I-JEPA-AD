@@ -1,0 +1,16 @@
+{
+  "bootstrap": {
+    "n": 1000,
+    "seed": 0
+  },
+  "final_layer_reference_reproduces_notebook_03": true,
+  "selected": {
+    "J_mean": 0.9861980098746583,
+    "option": "layer 32",
+    "treatment": "layer norm"
+  },
+  "selected_on": "synthetic-anomaly validation set (nominal validation images + fixed-seed synthetic defects)",
+  "test_split_scored": "once, for the final-layer reference and the selected layer only",
+  "test_used_for_selection": false,
+  "verdicts": "{('bottle', 'max score'): 'inconclusive (CI contains 0)', ('bottle', 'top-3 score'): 'inconclusive (CI contains 0)', ('capsule', 'max score'): 'improves', ('capsule', 'top-3 score'): 'improves', ('hazelnut', 'max score'): 'inconclusive (CI contains 0)', ('hazelnut', 'top-3 score'): 'inconclusive (CI contains 0)'}"
+}

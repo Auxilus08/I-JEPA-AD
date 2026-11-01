@@ -1,0 +1,512 @@
+{
+  "candidate_grid": {
+    "family": [
+      "baseline_cosine",
+      "pos_zscore",
+      "pos_centre",
+      "chan_standardise",
+      "layer_norm",
+      "maha_d32",
+      "maha_d64",
+      "maha_d128"
+    ],
+    "k": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "lam": [
+      1.0,
+      0.0,
+      0.5,
+      2.0
+    ],
+    "sigma": [
+      0.0,
+      4.0,
+      8.0,
+      16.0
+    ],
+    "start": {
+      "family": "baseline_cosine",
+      "k": 5,
+      "lam": 1.0,
+      "sigma": 0.0,
+      "tau": "default"
+    },
+    "tau": [
+      "default",
+      "q0.9",
+      "q0.95",
+      "q0.99",
+      "q0.995"
+    ],
+    "tau_quantiles": {
+      "q0.9": 0.9,
+      "q0.95": 0.95,
+      "q0.99": 0.99,
+      "q0.995": 0.995
+    }
+  },
+  "carried_over_from_notebook_06": {
+    "family": "pos_zscore",
+    "k": 3,
+    "lam": 1.0,
+    "sigma": 0.0,
+    "tau": "default"
+  },
+  "chosen_from": "layer-32 synthetic-anomaly validation set (nominal validation images + fixed-seed synthetic defects), cross-fitted, layer-32 predictors",
+  "criterion": "mean over categories of mean(image AUROC at the stage k, pixel AUROC, AUPRO)",
+  "declared_before_results": {
+    "criterion": "mean over categories of mean(image AUROC at the stage k, pixel AUROC, AUPRO)",
+    "families": [
+      "baseline_cosine",
+      "pos_zscore",
+      "pos_centre",
+      "chan_standardise",
+      "layer_norm",
+      "maha_d32",
+      "maha_d64",
+      "maha_d128"
+    ],
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "lambdas": [
+      1.0,
+      0.0,
+      0.5,
+      2.0
+    ],
+    "maha_ridge": 0.001,
+    "n_folds": 3,
+    "position_std_floor_fraction": 0.5,
+    "selection": "greedy, in stage order family -> sigma -> k -> lambda -> tau; global across categories; earliest option within the tie margin",
+    "sigmas": [
+      0.0,
+      4.0,
+      8.0,
+      16.0
+    ],
+    "start": {
+      "family": "baseline_cosine",
+      "k": 5,
+      "lam": 1.0,
+      "sigma": 0.0,
+      "tau": "default"
+    },
+    "tau_options": [
+      "default",
+      "q0.9",
+      "q0.95",
+      "q0.99",
+      "q0.995"
+    ],
+    "tie_margin": 0.005
+  },
+  "diagnostic_after_selection": {
+    "J_mean": {
+      "carried over from notebook 06": 0.9509346108552518,
+      "selected for layer 32": 0.9610404052931556,
+      "start (baseline score, k=5)": 0.9321626139797049
+    },
+    "carried_over_equals_selected": false,
+    "note": "computed after the selection was saved; does not influence it",
+    "selected_beats_carried_over_by": 0.010105794437903826,
+    "tie_margin": 0.005
+  },
+  "not_applied_to_test": true,
+  "not_covered": "encoder layer (fixed at 32), mask block size; the 2x2-block capsule check and the proxy-validity check against test numbers are intentionally not repeated",
+  "notebook": "notebooks/12_layer32_synthetic_settings.ipynb",
+  "protocol_identical_to_notebook_06": true,
+  "provenance": {
+    "details_file": "provenance_checks.json",
+    "encoder_checkpoint_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+    "layer": 32,
+    "layer_identity_sha256": "d1eade00ea52807522beb310587150ffa4cdb97a0140aa68a3dbb869954c4dd8",
+    "predictor_sha256": {
+      "bottle": "0409a5aec836fb1ac8601a62010640d80f0b6716efed8731d7d406fb6817c31a",
+      "capsule": "889b407f5e74400e518d644484d17385c625bf5cdbc90d790ff21ed8b6ca0380",
+      "hazelnut": "f2ed84cf6a4e31fafd27c16fd68cf587da5a796942aa221d6f5a8f9615352b7e"
+    },
+    "predictors_dir": "checkpoints/predictors_layer32",
+    "synthetic_fingerprint": "46c947cb99e1faf4"
+  },
+  "selected_settings": {
+    "family": "maha_d128",
+    "k": 1,
+    "lam": 1.0,
+    "sigma": 0.0,
+    "tau": "default"
+  },
+  "stages": [
+    {
+      "J_mean_of_winner": 0.9615288461329118,
+      "best_J_mean": 0.9615288461329118,
+      "best_option": "maha_d128",
+      "options_within_tie_margin": {
+        "maha_d128": 0.9615288461329118
+      },
+      "per_category_best_option": {
+        "bottle": "maha_d128",
+        "capsule": "pos_zscore",
+        "hazelnut": "pos_zscore"
+      },
+      "stage": "family",
+      "table": [
+        {
+          "J_bottle": 0.9457,
+          "J_capsule": 0.9121,
+          "J_hazelnut": 0.9387,
+          "J_mean": 0.9322,
+          "option": "baseline_cosine",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9339,
+          "J_capsule": 0.974,
+          "J_hazelnut": 0.9489,
+          "J_mean": 0.9523,
+          "option": "pos_zscore",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9455,
+          "J_capsule": 0.9539,
+          "J_hazelnut": 0.9436,
+          "J_mean": 0.9477,
+          "option": "pos_centre",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9283,
+          "J_capsule": 0.7581,
+          "J_hazelnut": 0.8352,
+          "J_mean": 0.8405,
+          "option": "chan_standardise",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9457,
+          "J_capsule": 0.9121,
+          "J_hazelnut": 0.9387,
+          "J_mean": 0.9322,
+          "option": "layer_norm",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9346,
+          "J_capsule": 0.8298,
+          "J_hazelnut": 0.8369,
+          "J_mean": 0.8671,
+          "option": "maha_d32",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9537,
+          "J_capsule": 0.904,
+          "J_hazelnut": 0.9073,
+          "J_mean": 0.9217,
+          "option": "maha_d64",
+          "selected": false,
+          "stage": "family",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9673,
+          "J_capsule": 0.9689,
+          "J_hazelnut": 0.9483,
+          "J_mean": 0.9615,
+          "option": "maha_d128",
+          "selected": true,
+          "stage": "family",
+          "within_tie_margin": true
+        }
+      ],
+      "tie_broken_toward_simpler": false,
+      "winner": "maha_d128"
+    },
+    {
+      "J_mean_of_winner": 0.9615288461329118,
+      "best_J_mean": 0.9615288461329118,
+      "best_option": "0.0",
+      "options_within_tie_margin": {
+        "0.0": 0.9615288461329118,
+        "4.0": 0.9612533517967073,
+        "8.0": 0.9587162066465161
+      },
+      "per_category_best_option": {
+        "bottle": "4.0",
+        "capsule": "0.0",
+        "hazelnut": "0.0"
+      },
+      "stage": "sigma",
+      "table": [
+        {
+          "J_bottle": 0.9673,
+          "J_capsule": 0.9689,
+          "J_hazelnut": 0.9483,
+          "J_mean": 0.9615,
+          "option": "0.0",
+          "selected": true,
+          "stage": "sigma",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9688,
+          "J_capsule": 0.968,
+          "J_hazelnut": 0.9469,
+          "J_mean": 0.9613,
+          "option": "4.0",
+          "selected": false,
+          "stage": "sigma",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9668,
+          "J_capsule": 0.9668,
+          "J_hazelnut": 0.9426,
+          "J_mean": 0.9587,
+          "option": "8.0",
+          "selected": false,
+          "stage": "sigma",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9513,
+          "J_capsule": 0.9498,
+          "J_hazelnut": 0.911,
+          "J_mean": 0.9374,
+          "option": "16.0",
+          "selected": false,
+          "stage": "sigma",
+          "within_tie_margin": false
+        }
+      ],
+      "tie_broken_toward_simpler": false,
+      "winner": 0.0
+    },
+    {
+      "J_mean_of_winner": 0.9610404052931556,
+      "best_J_mean": 0.9625634918562022,
+      "best_option": "3",
+      "options_within_tie_margin": {
+        "1": 0.9610404052931556,
+        "10": 0.9578107567088616,
+        "3": 0.9625634918562022,
+        "5": 0.9615288461329118
+      },
+      "per_category_best_option": {
+        "bottle": "5",
+        "capsule": "3",
+        "hazelnut": "1"
+      },
+      "stage": "k",
+      "table": [
+        {
+          "J_bottle": 0.967,
+          "J_capsule": 0.9631,
+          "J_hazelnut": 0.9531,
+          "J_mean": 0.961,
+          "option": "1",
+          "selected": true,
+          "stage": "k",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9668,
+          "J_capsule": 0.9689,
+          "J_hazelnut": 0.952,
+          "J_mean": 0.9626,
+          "option": "3",
+          "selected": false,
+          "stage": "k",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9673,
+          "J_capsule": 0.9689,
+          "J_hazelnut": 0.9483,
+          "J_mean": 0.9615,
+          "option": "5",
+          "selected": false,
+          "stage": "k",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9658,
+          "J_capsule": 0.9665,
+          "J_hazelnut": 0.9411,
+          "J_mean": 0.9578,
+          "option": "10",
+          "selected": false,
+          "stage": "k",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9645,
+          "J_capsule": 0.96,
+          "J_hazelnut": 0.9316,
+          "J_mean": 0.952,
+          "option": "20",
+          "selected": false,
+          "stage": "k",
+          "within_tie_margin": false
+        }
+      ],
+      "tie_broken_toward_simpler": true,
+      "winner": 1
+    },
+    {
+      "J_mean_of_winner": 0.9610404052931556,
+      "best_J_mean": 0.9611970682857581,
+      "best_option": "0.0",
+      "options_within_tie_margin": {
+        "0.0": 0.9611970682857581,
+        "0.5": 0.9610787997413605,
+        "1.0": 0.9610404052931556,
+        "2.0": 0.9607861495954481
+      },
+      "per_category_best_option": {
+        "bottle": "0.0",
+        "capsule": "1.0",
+        "hazelnut": "1.0"
+      },
+      "stage": "lam",
+      "table": [
+        {
+          "J_bottle": 0.967,
+          "J_capsule": 0.9631,
+          "J_hazelnut": 0.9531,
+          "J_mean": 0.961,
+          "option": "1.0",
+          "selected": true,
+          "stage": "lam",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9674,
+          "J_capsule": 0.9631,
+          "J_hazelnut": 0.9531,
+          "J_mean": 0.9612,
+          "option": "0.0",
+          "selected": false,
+          "stage": "lam",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9671,
+          "J_capsule": 0.9631,
+          "J_hazelnut": 0.9531,
+          "J_mean": 0.9611,
+          "option": "0.5",
+          "selected": false,
+          "stage": "lam",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9662,
+          "J_capsule": 0.9631,
+          "J_hazelnut": 0.9531,
+          "J_mean": 0.9608,
+          "option": "2.0",
+          "selected": false,
+          "stage": "lam",
+          "within_tie_margin": true
+        }
+      ],
+      "tie_broken_toward_simpler": true,
+      "winner": 1.0
+    },
+    {
+      "J_mean_of_winner": 0.9610404052931556,
+      "best_J_mean": 0.9610404052931556,
+      "best_option": "default",
+      "options_within_tie_margin": {
+        "default": 0.9610404052931556
+      },
+      "per_category_best_option": {
+        "bottle": "default",
+        "capsule": "default",
+        "hazelnut": "default"
+      },
+      "stage": "tau",
+      "table": [
+        {
+          "J_bottle": 0.967,
+          "J_capsule": 0.9631,
+          "J_hazelnut": 0.9531,
+          "J_mean": 0.961,
+          "option": "default",
+          "selected": true,
+          "stage": "tau",
+          "within_tie_margin": true
+        },
+        {
+          "J_bottle": 0.9557,
+          "J_capsule": 0.925,
+          "J_hazelnut": 0.9244,
+          "J_mean": 0.935,
+          "option": "q0.9",
+          "selected": false,
+          "stage": "tau",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9535,
+          "J_capsule": 0.9344,
+          "J_hazelnut": 0.9314,
+          "J_mean": 0.9398,
+          "option": "q0.95",
+          "selected": false,
+          "stage": "tau",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.953,
+          "J_capsule": 0.9381,
+          "J_hazelnut": 0.938,
+          "J_mean": 0.943,
+          "option": "q0.99",
+          "selected": false,
+          "stage": "tau",
+          "within_tie_margin": false
+        },
+        {
+          "J_bottle": 0.9544,
+          "J_capsule": 0.9431,
+          "J_hazelnut": 0.937,
+          "J_mean": 0.9448,
+          "option": "q0.995",
+          "selected": false,
+          "stage": "tau",
+          "within_tie_margin": false
+        }
+      ],
+      "tie_broken_toward_simpler": false,
+      "winner": "default"
+    }
+  ],
+  "test_split_read": false,
+  "test_split_statement": "The official MVTec test split was not read, listed, hashed, encoded, scored or otherwise used in this selection: only MVTecADDataset(train) was constructed, no *_test cache was opened, and no test result was used (the notebook 06 record was read for its declared protocol and final-layer choice only; its after-the-fact Spearman diagnostic against notebook 05 test numbers was ignored).",
+  "test_used_for_selection": false,
+  "tie_rule": "options within 0.005 of the stage best are tied; the earliest option in the declared list wins"
+}

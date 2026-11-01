@@ -1,0 +1,35 @@
+{
+  "bootstrap": {
+    "n": 1000,
+    "seed": 0
+  },
+  "headline_verdicts": {
+    "bottle": "inconclusive (CI contains 0)",
+    "capsule": "inconclusive (CI contains 0)",
+    "hazelnut": "worsens"
+  },
+  "no_training_no_fine_tuning": true,
+  "position_zscore_statistics_from": "all nominal validation images, per model",
+  "pretrained_model": {
+    "dtype": "float32",
+    "encoder_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+    "loaded_with": "torch.load(mmap=True, weights_only=True)",
+    "predictor": {
+      "blocks": 16,
+      "heads": 16,
+      "width": 384
+    }
+  },
+  "settings_from_notebook_06": {
+    "family": "pos_zscore",
+    "k": 3,
+    "lam": 1.0,
+    "sigma": 0.0,
+    "tau": "default"
+  },
+  "target_latents": "cached target-encoder latents (not recomputed)",
+  "test_used_for_selection": false,
+  "trained": "our baseline predictor, coarse pass only (reproduces results/calibration fixed row)",
+  "trained_reproduces_saved_baseline": true,
+  "what": "Meta pretrained I-JEPA context encoder + predictor, input masking, zero-shot, 4x4 coarse windows, coarse-only"
+}

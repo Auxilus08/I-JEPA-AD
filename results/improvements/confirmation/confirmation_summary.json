@@ -1,0 +1,24 @@
+{
+  "bootstrap": {
+    "n": 1000,
+    "seed": 0
+  },
+  "chosen_from": "synthetic-anomaly validation set (nominal validation images + synthetic defects), cross-fitted",
+  "reproduces_notebook05_variant": true,
+  "selected_settings": {
+    "family": "pos_zscore",
+    "k": 3,
+    "lam": 1.0,
+    "sigma": 0.0,
+    "tau": "default"
+  },
+  "selection_file": "results\\improvements\\synthetic_val\\selected_settings.json",
+  "statistics_refitted_on": "all nominal validation images (position, Mahalanobis, gate quantile) / all training latents (channel standardisation)",
+  "test_split_scored": "once, for the baseline and the selected configuration only",
+  "test_used_for_selection": false,
+  "verdicts_vs_baseline_max": {
+    "bottle": "improves",
+    "capsule": "inconclusive (CI contains 0)",
+    "hazelnut": "improves"
+  }
+}

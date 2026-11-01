@@ -1,0 +1,17 @@
+category,components,residual_vectors,in_sample_mean_score,held_out_half_mean_score,role,table,config,coarse_window,val_mean_token_score,val_p99_token_score,val_mean_of_image_max,train_images,top5_channel_share_of_squared_norm_raw,top5_channel_share_after_standardising,uniform_share_for_5_of_1408,std_max_over_median,train_mean_cosine_to_mean_token_raw,token_channel_mean_over_std
+bottle,64.0,4116.0,0.9968307018280029,0.985730767250061,primary,mahalanobis_split_half,,,,,,,,,,,,
+bottle,32.0,4116.0,0.9976774454116821,0.9881726801395416,sensitivity,mahalanobis_split_half,,,,,,,,,,,,
+bottle,128.0,4116.0,0.9947641491889954,0.98394376039505,sensitivity,mahalanobis_split_half,,,,,,,,,,,,
+capsule,64.0,4312.0,0.9962596297264099,0.9719921052455902,primary,mahalanobis_split_half,,,,,,,,,,,,
+capsule,32.0,4312.0,0.9973672032356262,0.9819939434528351,sensitivity,mahalanobis_split_half,,,,,,,,,,,,
+capsule,128.0,4312.0,0.9940531849861145,0.9694303870201111,sensitivity,mahalanobis_split_half,,,,,,,,,,,,
+hazelnut,64.0,7644.0,0.9975364208221436,0.928707093000412,primary,mahalanobis_split_half,,,,,,,,,,,,
+hazelnut,32.0,7644.0,0.998077392578125,0.9502579569816589,sensitivity,mahalanobis_split_half,,,,,,,,,,,,
+hazelnut,128.0,7644.0,0.9969306588172913,0.9481695592403412,sensitivity,mahalanobis_split_half,,,,,,,,,,,,
+capsule,,,,,,block2_nominal_validation,"baseline predictor, 4x4 windows (= baseline)",4.0,0.12597745656967163,0.5432763695716858,0.681681215763092,,,,,,,
+capsule,,,,,,block2_nominal_validation,"baseline predictor, 2x2 windows (control)",2.0,0.12759092450141907,0.5420131087303162,0.6695814728736877,,,,,,,
+capsule,,,,,,block2_nominal_validation,"2x2-block predictor, 4x4 windows (control)",4.0,0.12916190922260284,0.5169823169708252,0.6312191486358643,,,,,,,
+capsule,,,,,,block2_nominal_validation,"2x2-block predictor, 2x2 windows (item 5)",2.0,0.12455032020807266,0.507952094078064,0.5806472301483154,,,,,,,
+bottle,,,,,,channel_outliers_train,,,,,,188.0,0.08098221570253372,0.0035511369351297617,0.0035511363636363635,52.71516799926758,0.5556021928787231,0.020095229148864746
+capsule,,,,,,channel_outliers_train,,,,,,197.0,0.08011092990636826,0.003551136702299118,0.0035511363636363635,45.57715606689453,0.5694730877876282,0.01858643814921379
+hazelnut,,,,,,channel_outliers_train,,,,,,352.0,0.08928360044956207,0.003551137400791049,0.0035511363636363635,51.243736267089844,0.4453561305999756,0.02287619188427925

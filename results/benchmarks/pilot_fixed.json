@@ -1,0 +1,192 @@
+{
+  "device": "cuda",
+  "encoder_name": "ijepa_vit_g16_in22k_ep44",
+  "encoder_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+  "masking_settings": {
+    "coarse_size": 4,
+    "fine_size": 1,
+    "lam": 1.0,
+    "threshold": 0.5
+  },
+  "mode": "fixed",
+  "nominal_split": {
+    "seed": 0,
+    "val_fraction": 0.1
+  },
+  "results": [
+    {
+      "aupro": 0.766334834997065,
+      "category": "bottle",
+      "decision_threshold": 0.32968220114707947,
+      "image_auroc": 0.9246031746031746,
+      "image_score_definition": {
+        "comparable_across": "runs with identical mode and lambda only",
+        "formula": "max(patch_scores) / upper_bound",
+        "lambda": 1.0,
+        "mode": "fixed",
+        "upper_bound": 2.0
+      },
+      "latency_scope": "cached-latent predictor scoring; excludes image encoding",
+      "mean_masks_per_image": 16.0,
+      "mean_predictor_latency_ms": 18.08143976209012,
+      "mode": "fixed",
+      "num_defects": 63,
+      "num_images": 83,
+      "objective": "cosine",
+      "p95_predictor_latency_ms": 19.60249001858756,
+      "peak_vram_mb": 136.0908203125,
+      "pixel_auroc": 0.9297192580951186,
+      "predictor_checkpoint": "checkpoints\\predictors\\bottle_cosine.pt",
+      "predictor_provenance": {
+        "mask_strategy": "inference_aligned",
+        "reproducibility": {
+          "git_commit": "7484870db02a1dff4d913b9acfa229ec9a6437fc",
+          "git_dirty": true,
+          "mask_strategy": "inference_aligned",
+          "python_version": "3.11.9",
+          "seed": 0,
+          "shuffle_seed": "seed + epoch",
+          "torch_version": "2.2.2+cu121",
+          "train_mask_seed": 0,
+          "validation_mask_protocol": "per-sample SHA-256(base_seed, image_id); fixed across epochs; independent of batch size/order",
+          "validation_mask_seed": 10000
+        },
+        "status": "complete",
+        "training_config": {
+          "batch_size": 16,
+          "block_probability": 0.5,
+          "block_size": 4,
+          "device": "cuda",
+          "learning_rate": 0.0001,
+          "loss_type": "cosine",
+          "mask_ratio": 0.4,
+          "mask_strategy": "inference_aligned",
+          "max_epochs": 100,
+          "min_delta": 0.0,
+          "patience": 10,
+          "seed": 0,
+          "single_token_count": 8,
+          "weight_decay": 0.05
+        }
+      },
+      "validation_observed_fpr": 0.047619047619047616,
+      "validation_target_fpr": 0.05
+    },
+    {
+      "aupro": 0.09809339455245349,
+      "category": "capsule",
+      "decision_threshold": 0.40098807215690613,
+      "image_auroc": 0.5217391304347826,
+      "image_score_definition": {
+        "comparable_across": "runs with identical mode and lambda only",
+        "formula": "max(patch_scores) / upper_bound",
+        "lambda": 1.0,
+        "mode": "fixed",
+        "upper_bound": 2.0
+      },
+      "latency_scope": "cached-latent predictor scoring; excludes image encoding",
+      "mean_masks_per_image": 16.0,
+      "mean_predictor_latency_ms": 17.523523484476645,
+      "mode": "fixed",
+      "num_defects": 109,
+      "num_images": 132,
+      "objective": "cosine",
+      "p95_predictor_latency_ms": 19.10538999218261,
+      "peak_vram_mb": 136.9765625,
+      "pixel_auroc": 0.6844778071010429,
+      "predictor_checkpoint": "checkpoints\\predictors\\capsule_cosine.pt",
+      "predictor_provenance": {
+        "mask_strategy": "inference_aligned",
+        "reproducibility": {
+          "git_commit": "7484870db02a1dff4d913b9acfa229ec9a6437fc",
+          "git_dirty": true,
+          "mask_strategy": "inference_aligned",
+          "python_version": "3.11.9",
+          "seed": 0,
+          "shuffle_seed": "seed + epoch",
+          "torch_version": "2.2.2+cu121",
+          "train_mask_seed": 0,
+          "validation_mask_protocol": "per-sample SHA-256(base_seed, image_id); fixed across epochs; independent of batch size/order",
+          "validation_mask_seed": 10000
+        },
+        "status": "complete",
+        "training_config": {
+          "batch_size": 16,
+          "block_probability": 0.5,
+          "block_size": 4,
+          "device": "cuda",
+          "learning_rate": 0.0001,
+          "loss_type": "cosine",
+          "mask_ratio": 0.4,
+          "mask_strategy": "inference_aligned",
+          "max_epochs": 100,
+          "min_delta": 0.0,
+          "patience": 10,
+          "seed": 0,
+          "single_token_count": 8,
+          "weight_decay": 0.05
+        }
+      },
+      "validation_observed_fpr": 0.045454545454545456,
+      "validation_target_fpr": 0.05
+    },
+    {
+      "aupro": 0.5777445405458604,
+      "category": "hazelnut",
+      "decision_threshold": 0.43337658047676086,
+      "image_auroc": 0.7985714285714286,
+      "image_score_definition": {
+        "comparable_across": "runs with identical mode and lambda only",
+        "formula": "max(patch_scores) / upper_bound",
+        "lambda": 1.0,
+        "mode": "fixed",
+        "upper_bound": 2.0
+      },
+      "latency_scope": "cached-latent predictor scoring; excludes image encoding",
+      "mean_masks_per_image": 16.0,
+      "mean_predictor_latency_ms": 17.46569272786887,
+      "mode": "fixed",
+      "num_defects": 70,
+      "num_images": 110,
+      "objective": "cosine",
+      "p95_predictor_latency_ms": 19.317975010199007,
+      "peak_vram_mb": 137.16162109375,
+      "pixel_auroc": 0.9067286482330519,
+      "predictor_checkpoint": "checkpoints\\predictors\\hazelnut_cosine.pt",
+      "predictor_provenance": {
+        "mask_strategy": "inference_aligned",
+        "reproducibility": {
+          "git_commit": "7484870db02a1dff4d913b9acfa229ec9a6437fc",
+          "git_dirty": true,
+          "mask_strategy": "inference_aligned",
+          "python_version": "3.11.9",
+          "seed": 0,
+          "shuffle_seed": "seed + epoch",
+          "torch_version": "2.2.2+cu121",
+          "train_mask_seed": 0,
+          "validation_mask_protocol": "per-sample SHA-256(base_seed, image_id); fixed across epochs; independent of batch size/order",
+          "validation_mask_seed": 10000
+        },
+        "status": "complete",
+        "training_config": {
+          "batch_size": 16,
+          "block_probability": 0.5,
+          "block_size": 4,
+          "device": "cuda",
+          "learning_rate": 0.0001,
+          "loss_type": "cosine",
+          "mask_ratio": 0.4,
+          "mask_strategy": "inference_aligned",
+          "max_epochs": 100,
+          "min_delta": 0.0,
+          "patience": 10,
+          "seed": 0,
+          "single_token_count": 8,
+          "weight_decay": 0.05
+        }
+      },
+      "validation_observed_fpr": 0.02564102564102564,
+      "validation_target_fpr": 0.05
+    }
+  ]
+}

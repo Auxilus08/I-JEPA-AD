@@ -1,0 +1,10 @@
+category,row,max_abs_diff,passed
+bottle,original,1.1102230246251565e-16,True
+bottle,l32 cosine,1.1102230246251565e-16,True
+bottle,l32 notebook 11,1.1102230246251565e-16,True
+capsule,original,4.163336342344337e-17,True
+capsule,l32 cosine,5.551115123125783e-17,True
+capsule,l32 notebook 11,0.0,True
+hazelnut,original,0.0,True
+hazelnut,l32 cosine,0.0,True
+hazelnut,l32 notebook 11,1.1102230246251565e-16,True

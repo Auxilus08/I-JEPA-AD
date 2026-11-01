@@ -1,0 +1,65 @@
+{
+  "best_J_mean": 0.9872913757429164,
+  "chosen_from": "synthetic-anomaly validation set (nominal validation images + fixed-seed synthetic defects)",
+  "declared_before_results": {
+    "criterion": "mean over categories of mean(image AUROC top-k, pixel AUROC, AUPRO) on the synthetic validation set",
+    "k": 3,
+    "layers": [
+      8,
+      12,
+      16,
+      20,
+      24,
+      28,
+      32,
+      36,
+      40
+    ],
+    "order": [
+      "final (cached)",
+      "layer 40",
+      "layer 36",
+      "layer 32",
+      "layer 28",
+      "layer 24",
+      "layer 20",
+      "layer 16",
+      "layer 12",
+      "layer 8"
+    ],
+    "score": "L2 distance to the nearest nominal training token (memory bank of all training tokens of the category)",
+    "treatments": [
+      "layer norm",
+      "+ channel standardisation"
+    ]
+  },
+  "feature_provenance": {
+    "normalisation": "parameter-free token layer norm",
+    "target_encoder_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b"
+  },
+  "per_category_best": {
+    "bottle": {
+      "J": 0.9798498333832781,
+      "option": "layer 28",
+      "treatment": "layer norm"
+    },
+    "capsule": {
+      "J": 0.9953656946454533,
+      "option": "layer 24",
+      "treatment": "+ channel standardisation"
+    },
+    "hazelnut": {
+      "J": 0.9873705225714723,
+      "option": "layer 28",
+      "treatment": "+ channel standardisation"
+    }
+  },
+  "selected": {
+    "J_mean": 0.9861980098746583,
+    "option": "layer 32",
+    "treatment": "layer norm"
+  },
+  "test_split_read": false,
+  "test_used_for_selection": false,
+  "tie_margin": 0.005
+}

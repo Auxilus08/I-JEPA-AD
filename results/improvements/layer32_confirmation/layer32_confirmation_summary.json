@@ -1,0 +1,75 @@
+{
+  "bootstrap": {
+    "n": 1000,
+    "resampling": "good and anomalous test images separately; same resamples for every comparison within a category",
+    "seed": 0
+  },
+  "chosen_from": "layer-32 synthetic-anomaly validation set (nominal validation images + fixed-seed synthetic defects), cross-fitted, layer-32 predictors",
+  "comparisons": [
+    "1 PRIMARY: scoring change only (layer 32, same windows)",
+    "2a vs notebook 11 as reported (family AND k differ: z-score top-3)",
+    "2b vs notebook 11, same score k=3 (family differs; selected top-3 is a diagnostic)",
+    "2c vs notebook 11, same score k=1 (family differs)",
+    "3 HISTORICAL: vs original baseline (layer + predictor + scoring all differ)",
+    "context: layer effect alone, layer 32 cosine vs original"
+  ],
+  "device": "cuda",
+  "fit_info": {
+    "bottle": {
+      "components": 128,
+      "mahalanobis_fit_images": 21,
+      "mahalanobis_fit_tokens": 4116,
+      "ridge": 0.001
+    },
+    "capsule": {
+      "components": 128,
+      "mahalanobis_fit_images": 22,
+      "mahalanobis_fit_tokens": 4312,
+      "ridge": 0.001
+    },
+    "hazelnut": {
+      "components": 128,
+      "mahalanobis_fit_images": 39,
+      "mahalanobis_fit_tokens": 7644,
+      "ridge": 0.001
+    }
+  },
+  "git": {
+    "dirty_files": 28,
+    "head": "7688586a767d4178d5a0425e4c113aa8c4fce1eb"
+  },
+  "image_score": "raw_image_score (max fused patch score) for original, l32 cosine and selected (Mahalanobis scores are unbounded); top-3 is a diagnostic only",
+  "predictor_sha256": {
+    "final/bottle": "a336b4c8514b7ac0826a790e4373a72a188906c2c1f5c0ef3bf4e5f980b49889",
+    "final/capsule": "b01814f44b12a1875402e89a5e21f4aee78af6506d8ee915bc381bef8afc9138",
+    "final/hazelnut": "2de9be7aabbe9e16b005304675f080839e5a560554de31163c9794dbd2bc5bab",
+    "layer 32/bottle": "0409a5aec836fb1ac8601a62010640d80f0b6716efed8731d7d406fb6817c31a",
+    "layer 32/capsule": "889b407f5e74400e518d644484d17385c625bf5cdbc90d790ff21ed8b6ca0380",
+    "layer 32/hazelnut": "f2ed84cf6a4e31fafd27c16fd68cf587da5a796942aa221d6f5a8f9615352b7e"
+  },
+  "primary_delta_image_auroc": {
+    "bottle": 0.0325,
+    "capsule": 0.0574,
+    "hazelnut": 0.0132
+  },
+  "primary_verdicts": {
+    "bottle": "improves",
+    "capsule": "inconclusive (CI contains 0)",
+    "hazelnut": "inconclusive (CI contains 0)"
+  },
+  "reference_rows_reproduce_saved_results": true,
+  "selected_settings": {
+    "family": "maha_d128",
+    "k": 1,
+    "lam": 1.0,
+    "sigma": 0.0,
+    "tau": "default"
+  },
+  "selection_file": "results\\improvements\\layer32_synthetic_val\\selected_settings.json",
+  "selection_sha256": "9782602dc3511bda53be184635c2b391fb335e7df4285f0ba3eb6aa04d5e28e4",
+  "selection_unchanged_during_run": true,
+  "statistics_fitted_on": "all nominal validation images of each category (Mahalanobis: coarse-window residuals; z-score for the notebook 11 row): no test, no synthetic data",
+  "test_split_scored": "once per row (original, l32 cosine, selected; the notebook 11 row is derived from the l32 cosine pass); no setting was changed or added after seeing test numbers",
+  "test_used_for_selection": false,
+  "torch": "2.2.2+cu121"
+}

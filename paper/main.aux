@@ -1,0 +1,78 @@
+\relax 
+\citation{bergmann2019mvtec,bergmann2021mvtec}
+\citation{he2022mae,zavrtanik2021inpainting,zavrtanik2021draem}
+\citation{defard2021padim,roth2022patchcore}
+\citation{assran2023ijepa,lecun2022path}
+\@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
+\citation{he2022mae,zavrtanik2021draem}
+\citation{zavrtanik2021inpainting}
+\citation{defard2021padim}
+\citation{roth2022patchcore}
+\citation{batzner2024efficientad}
+\citation{akcay2022anomalib}
+\citation{assran2023ijepa}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces I-JEPA-AD overview. (a) Latents of nominal images are cached once and used to train the predictor. (b) At test time a coarse pass is followed by a gated fine pass, and the two score maps are fused.}}{2}{}\protected@file@percent }
+\newlabel{fig:arch}{{1}{2}{}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {II}Related Work}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Method}{2}{}\protected@file@percent }
+\newlabel{sec:method}{{III}{2}{}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-A}}Frozen encoder and latent cache}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-B}}Latent predictor}{2}{}\protected@file@percent }
+\newlabel{eq:loss}{{1}{2}{}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-C}}Coarse-to-fine inference}{2}{}\protected@file@percent }
+\newlabel{eq:fuse}{{3}{2}{}{equation.3}{}}
+\citation{bergmann2019mvtec}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Pilot split sizes (images).}}{3}{}\protected@file@percent }
+\newlabel{tab:data}{{I}{3}{}{table.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {III-D}}Cost model}{3}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Experimental Setup}{3}{}\protected@file@percent }
+\newlabel{sec:setup}{{IV}{3}{}{section.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Image AUROC (top-5 mean score) of the baseline and augmented predictors versus the nearest-neighbour reference on the test split; values match Table~\ref {tab:main}.}}{3}{}\protected@file@percent }
+\newlabel{fig:ref}{{2}{3}{}{figure.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {V}Results}{3}{}\protected@file@percent }
+\newlabel{sec:results}{{V}{3}{}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}Detection and localisation}{3}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Test results on three MVTec AD categories. I-JEPA-AD uses adaptive masking with $\lambda =1$ and either the default gate ($\tau =0.5$) or the gate calibrated on nominal validation images (0.99 token quantile, $\tau \approx 0.16$--$0.35$; the setting declared as primary before test scoring). ``Image AUROC'' uses the max patch score and ``top-5'' the top-5 mean score. Augmented rows use the default gate. The PatchCore-style row is a nearest-neighbour reference on the same latents, not a full PatchCore. Best value per column and category in bold.}}{4}{}\protected@file@percent }
+\newlabel{tab:main}{{II}{4}{}{table.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Pixel-level metrics and mean predictor passes per image for four masking policies (baseline predictors, test split). ``Cal.'' is the validation-calibrated gate with the 0.99 token quantile.}}{4}{}\protected@file@percent }
+\newlabel{tab:modes}{{III}{4}{}{table.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}Masking policy: accuracy versus cost}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-C}}Latency and memory}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Validation-Only Calibration of the Gate and Image Score}{4}{}\protected@file@percent }
+\newlabel{sec:calib}{{VI}{4}{}{section.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Raw cosine-discrepancy maps for one pronounced defect per category (top to bottom: bottle, capsule, hazelnut). Columns: image, ground truth, coarse map, gated fine map, fused adaptive map and the dense reference. The fine map is empty because the default gate never fires on these images. Colour scales are relative within each row.}}{5}{}\protected@file@percent }
+\newlabel{fig:heat}{{3}{5}{}{figure.3}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Hazelnut crack with the default and the calibrated gate (baseline predictor). The cyan contour is the ground truth. With the calibrated gate ($\tau =0.350$) the fine pass fires on 32 tokens around the defect (48 masks in total instead of 16) and the fused map suppresses background clutter. Each panel is min-max normalised for display only; pixel AUROC is computed per image on the raw map. This is the one example where the calibrated gate helped clearly; see the text for the other two.}}{5}{}\protected@file@percent }
+\newlabel{fig:hazcal}{{4}{5}{}{figure.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Latency and memory on an RTX 4060 (8~GB), FP32 encoder. Left: end-to-end (mean $\pm $ std over 40 images). Right: predictor-only scoring on cached latents, per category (bottle/capsule/hazelnut).}}{5}{}\protected@file@percent }
+\newlabel{tab:latency}{{IV}{5}{}{table.4}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces End-to-end latency per image split into encoder and scoring time. The PatchCore-style bar adds the measured 8.0~ms bank search to the encoder time.}}{6}{}\protected@file@percent }
+\newlabel{fig:lat}{{5}{6}{}{figure.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Gate calibration on nominal validation images. For each category: $\tau $ / fine windows per nominal image / \% nominal images triggering a fine pass.}}{6}{}\protected@file@percent }
+\newlabel{tab:gate}{{V}{6}{}{table.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Validation-Selected Improvements}{6}{}\protected@file@percent }
+\newlabel{sec:improve}{{VII}{6}{}{section.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Paired-bootstrap change in image AUROC versus the original pipeline (default gate, max score), with 95\,\% interval. Asterisk: interval excludes zero.}}{6}{}\protected@file@percent }
+\newlabel{tab:boot}{{VI}{6}{}{table.6}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Image AUROC versus $k$ of the top-$k$ mean score ($k=1$ is the max score) with $\lambda =1$, for the default and calibrated gates (baseline predictors, test split). The dashed line is chance. This is a sensitivity view, not a selection.}}{7}{}\protected@file@percent }
+\newlabel{fig:k}{{6}{7}{}{figure.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Discussion}{7}{}\protected@file@percent }
+\newlabel{sec:disc}{{VIII}{7}{}{section.8}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Test results after the validation-selected changes (official test split, one scoring pass per row). All layer-32 rows use the same predictor architecture, training recipe and masks as the baseline; only the cached tokens change. Image AUROC is given for the max score and for the mean of the top-3 token scores. The z-score settings (position z-score, $k{=}3$) were chosen on synthetic validation defects for the final-layer predictor and carried over unchanged; layer 32 was chosen on the same synthetic data. \textsuperscript  {a}Re-selected on layer-32 synthetic validation data and scored once on test; its score is the max (top-3 shown for comparison only). \textsuperscript  {b}Nearest-neighbour reference on layer-32 tokens (full memory bank), context only.}}{8}{}\protected@file@percent }
+\newlabel{tab:improved}{{VII}{8}{}{table.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Paired-bootstrap change in image AUROC on the test split (1,000 resamples, same resamples for all comparisons within a category, 95\,\% interval). Asterisk: interval excludes zero. Rows 1--4 use configurations fixed before their test evaluation; rows 5--7 evaluate the layer-32 re-selection (Mahalanobis).}}{8}{}\protected@file@percent }
+\newlabel{tab:boot2}{{VIII}{8}{}{table.8}{}}
+\bibcite{assran2023ijepa}{1}
+\bibcite{he2022mae}{2}
+\bibcite{bergmann2019mvtec}{3}
+\bibcite{bergmann2021mvtec}{4}
+\bibcite{roth2022patchcore}{5}
+\bibcite{defard2021padim}{6}
+\bibcite{zavrtanik2021draem}{7}
+\bibcite{zavrtanik2021inpainting}{8}
+\bibcite{batzner2024efficientad}{9}
+\bibcite{akcay2022anomalib}{10}
+\bibcite{lecun2022path}{11}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Conclusion}{9}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{References}{9}{}\protected@file@percent }
+\gdef \@abspage@last{9}

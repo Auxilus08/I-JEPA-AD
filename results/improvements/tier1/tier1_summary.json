@@ -1,0 +1,124 @@
+{
+  "baseline_reproduces_results_calibration": true,
+  "block2_split_check": {
+    "best_epoch": 74,
+    "best_val_loss": 0.12247512421824715,
+    "train_ids_match": true,
+    "val_ids_match": true
+  },
+  "block2_training_config": {
+    "batch_size": 16,
+    "block_probability": 0.5,
+    "block_size": 2,
+    "device": "cuda",
+    "learning_rate": 0.0001,
+    "loss_type": "cosine",
+    "mask_ratio": 0.4,
+    "mask_strategy": "inference_aligned",
+    "max_epochs": 100,
+    "min_delta": 0.0,
+    "patience": 10,
+    "seed": 0,
+    "single_token_count": 8,
+    "weight_decay": 0.05
+  },
+  "bootstrap_matches_notebook_04": true,
+  "declared_before_test": {
+    "baseline": "baseline predictors, adaptive mode, default tau, lambda from YAML, max patch score",
+    "bootstrap": {
+      "n": 1000,
+      "seed": 0,
+      "unit": "test images, good and anomalous resampled separately, paired across variants"
+    },
+    "fine_gate": "unchanged: opens on baseline 1-cos region scores at the default tau; every variant evaluates the baseline windows",
+    "item1_position_zscore": {
+      "ablation": "centre only (subtract per-position mean, no division)",
+      "coarse_stats_from_mode": "fixed (4x4 windows)",
+      "fine_stats_from_mode": "dense (1x1 windows)",
+      "fused": "z_coarse + lambda * fired * z_fine, fired = region score >= tau",
+      "stats_from": "nominal validation images only",
+      "std_floor_fraction_of_median_std": 0.5
+    },
+    "item2_channel": {
+      "stats_from": "nominal training latents only",
+      "std_eps": 1e-06,
+      "variants": [
+        "per-channel standardisation then 1-cos",
+        "parameter-free layer norm then 1-cos"
+      ]
+    },
+    "item3_smoothing": {
+      "control": "sigma 0 through the same two-stage resampling",
+      "image_score": "smoothed map sampled at the 196 token centres, then max / top-k",
+      "pixel_maps": "14x14 -> 224x224 bilinear, Gaussian blur, 224x224 -> ground-truth size bilinear",
+      "sigma_primary_px_on_224_map": 4.0,
+      "sigma_sensitivity": [
+        8.0,
+        16.0
+      ]
+    },
+    "item4_mahalanobis": {
+      "components_primary": 64,
+      "components_sensitivity": [
+        32,
+        128
+      ],
+      "covariance": "one shared Gaussian over all positions",
+      "fitted_on": "coarse-window residuals; the same model scores fine windows (they rarely fire at tau 0.5)",
+      "ridge_relative_to_mean_eigenvalue": 0.001,
+      "stats_from": "nominal validation images only"
+    },
+    "item5_block2": {
+      "coarse_size": 2,
+      "controls": [
+        "baseline predictor, 2x2 windows (control)",
+        "2x2-block predictor, 4x4 windows (control)"
+      ],
+      "predictor": "checkpoints\\predictors_block2\\capsule_cosine.pt"
+    },
+    "masking_settings_yaml": {
+      "coarse_size": 4,
+      "fine_size": 1,
+      "lam": 1.0,
+      "threshold": 0.5
+    },
+    "top_k": 5
+  },
+  "encoder_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+  "images": {
+    "bottle": {
+      "test": 83,
+      "train": 188,
+      "val": 21
+    },
+    "capsule": {
+      "test": 132,
+      "train": 197,
+      "val": 22
+    },
+    "hazelnut": {
+      "test": 110,
+      "train": 352,
+      "val": 39
+    }
+  },
+  "masks_per_image_identical_for_items_1_to_4": true,
+  "predictor_provenance_status": {
+    "bottle": "complete",
+    "capsule": "complete",
+    "hazelnut": "complete"
+  },
+  "predictor_set": "baseline (checkpoints/predictors) + capsule 2x2-block (checkpoints/predictors_block2)",
+  "statistics_provenance": {
+    "item1_position_zscore": "nominal validation images only",
+    "item2_channel_standardisation": "nominal training latents only",
+    "item4_mahalanobis": "nominal validation images only"
+  },
+  "tau_and_all_settings_chosen_from": "declared up front or nominal train/validation data only",
+  "test_used_for_selection": false,
+  "verdict_counts_primary_vs_baseline_max": {
+    "improves": 10,
+    "inconclusive (CI contains 0)": 20,
+    "worsens": 2
+  }
+}

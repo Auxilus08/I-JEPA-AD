@@ -1,0 +1,27 @@
+{
+  "bootstrap": {
+    "n": 1000,
+    "seed": 0
+  },
+  "cache_identity": {
+    "final": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+    "layer 32": "d1eade00ea52807522beb310587150ffa4cdb97a0140aa68a3dbb869954c4dd8"
+  },
+  "final_rows_reproduce_notebook_07": true,
+  "headline_verdicts": {
+    "bottle": "inconclusive (CI contains 0)",
+    "capsule": "improves",
+    "hazelnut": "improves"
+  },
+  "layer": 32,
+  "same_recipe_as_baseline": true,
+  "settings_carried_over_from_notebook_06": {
+    "family": "pos_zscore",
+    "k": 3,
+    "lam": 1.0,
+    "sigma": 0.0,
+    "tau": "default"
+  },
+  "settings_reselected_for_layer_32": false,
+  "test_used_for_selection": false
+}

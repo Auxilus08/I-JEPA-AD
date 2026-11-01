@@ -1,0 +1,10 @@
+category,comparison,reference,image_auroc,reference_auroc,delta_image_auroc,ci95_low,ci95_high,verdict
+bottle,"selected, top-3 score","baseline, max score (the requested reference)",0.9976190476190476,0.9246031746031746,0.07301587301587298,0.01904761904761909,0.15160714285714286,improves
+bottle,"selected, top-3 score","baseline, top-3 score (same score)",0.9976190476190476,0.9515873015873015,0.04603174603174609,0.011904761904761862,0.09682539682539681,improves
+bottle,"selected, max score","baseline, max score",0.9928571428571429,0.9246031746031746,0.06825396825396823,0.013492063492063552,0.1445238095238095,improves
+capsule,"selected, top-3 score","baseline, max score (the requested reference)",0.6721180694056641,0.5217391304347826,0.1503789389708815,-0.045073793378540006,0.3558934982050259,inconclusive (CI contains 0)
+capsule,"selected, top-3 score","baseline, top-3 score (same score)",0.6721180694056641,0.5121659353809334,0.15995213402473074,-0.027163940965297156,0.35663143199042674,inconclusive (CI contains 0)
+capsule,"selected, max score","baseline, max score",0.6222576785001994,0.5217391304347826,0.10051854806541682,-0.11016154766653372,0.318468288791384,inconclusive (CI contains 0)
+hazelnut,"selected, top-3 score","baseline, max score (the requested reference)",0.9392857142857143,0.8021428571428572,0.13714285714285712,0.054276785714285694,0.22643749999999999,improves
+hazelnut,"selected, top-3 score","baseline, top-3 score (same score)",0.9392857142857143,0.8975,0.041785714285714315,-0.013571428571428568,0.10358035714285721,inconclusive (CI contains 0)
+hazelnut,"selected, max score","baseline, max score",0.8642857142857143,0.8021428571428572,0.062142857142857166,-0.037151785714285714,0.16821428571428565,inconclusive (CI contains 0)

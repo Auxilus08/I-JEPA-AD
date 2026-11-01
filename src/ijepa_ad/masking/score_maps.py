@@ -10,6 +10,8 @@ Two paths share one interpolation rule (bilinear, ``align_corners=False``):
 
 from __future__ import annotations
 
+import math
+
 import torch
 from torch import Tensor
 
@@ -35,6 +37,32 @@ def upsample_patch_scores(
     return torch.nn.functional.interpolate(
         maps, size=size, mode="bilinear", align_corners=False
     )
+
+
+def smooth_score_maps(maps: Tensor, sigma: float, *, truncate: float = 4.0) -> Tensor:
+    """Gaussian-blur raw score maps ``[N, 1, H, W]``; ``sigma`` is in map pixels.
+
+    Separable convolution with reflected borders (the ``scipy.ndimage.gaussian_filter``
+    default, as used by PatchCore and PaDiM). ``sigma == 0`` returns ``maps``
+    unchanged. The kernel radius is ``ceil(truncate * sigma)`` and must fit the map.
+    """
+    if maps.ndim != 4 or maps.shape[1] != 1:
+        raise ValueError("maps must have shape [N, 1, H, W]")
+    if sigma < 0:
+        raise ValueError("sigma must be non-negative")
+    if sigma == 0:
+        return maps
+    radius = math.ceil(truncate * sigma)
+    if radius >= min(maps.shape[-2:]):
+        raise ValueError("sigma is too large for the map size")
+    offsets = torch.arange(-radius, radius + 1, dtype=maps.dtype, device=maps.device)
+    kernel = torch.exp(-0.5 * (offsets / sigma) ** 2)
+    kernel = kernel / kernel.sum()
+    padded = torch.nn.functional.pad(
+        maps, (radius, radius, radius, radius), mode="reflect"
+    )
+    horizontal = torch.nn.functional.conv2d(padded, kernel.reshape(1, 1, 1, -1))
+    return torch.nn.functional.conv2d(horizontal, kernel.reshape(1, 1, -1, 1))
 
 
 def patch_scores_to_heatmap(

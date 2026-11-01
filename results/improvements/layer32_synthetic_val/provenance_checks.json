@@ -1,0 +1,144 @@
+{
+  "checks_passed": [
+    "predictor identity == latent cache identity == derived layer-32 hash",
+    "layer-32 predictor rejected for the final-layer encoder hash",
+    "predictor train/val ids == nominal split ids used here",
+    "latents_layer32 val == layer_features layer32 val after float16 rounding",
+    "synthetic PNG hashes verified against the manifest; layer features keyed by those hashes",
+    "synthetic base images == validation images",
+    "every defect mask non-empty at 224 px",
+    "post-hoc adaptive scores == MaskedLatentScorer",
+    "no *test* path requested"
+  ],
+  "clean_validation_and_training_tokens": "data/cache/latents_layer32 (train.pt, val.pt)",
+  "clean_validation_tokens_used": "data/cache/layer_features/layer32/<category>_val.pt (float16), bit-identical to latents_layer32 val after float16 rounding",
+  "device": "cuda",
+  "encoder_checkpoint_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+  "encoder_name": "ijepa_vit_g16_in22k_ep44_layer32",
+  "git": {
+    "dirty_files": 27,
+    "head": "7688586a767d4178d5a0425e4c113aa8c4fce1eb"
+  },
+  "layer": 32,
+  "layer_identity_formula": "SHA-256(checkpoint_sha256|layer=32|token_layer_norm|v1)",
+  "layer_identity_sha256": "d1eade00ea52807522beb310587150ffa4cdb97a0140aa68a3dbb869954c4dd8",
+  "per_category": {
+    "bottle": {
+      "clean_val_per_fold": [
+        7,
+        7,
+        7
+      ],
+      "files_sha256": {
+        "data\\cache\\latents_layer32\\bottle\\train.pt": "725957d99d4ac6f056445ed446edf8dfde80a445599a3241819e1f494d344fa5",
+        "data\\cache\\latents_layer32\\bottle\\val.pt": "0976d269121f929ee03f677831a4e9005d5dfcb6a5c4a6745238f1816906f6b9",
+        "data\\cache\\layer_features\\layer32\\bottle_synthetic.pt": "e2b0465028cfd211f73c60684fdc0ee09d82140dac2f917037973560a7a5dea6",
+        "data\\cache\\layer_features\\layer32\\bottle_val.pt": "bda4d5329691bb38b49f6fc904a9bad71adf8c4cd8d232909a1d969060b13fb9"
+      },
+      "latents_layer32_val_equals_layer_features_val_after_fp16": true,
+      "max_abs_one_minus_cos_fp32_vs_fp16_val": 3.5762786865234375e-07,
+      "n_clean_val": 21,
+      "n_synthetic": 84,
+      "n_train_latents": 188,
+      "predictor_best_epoch": 99,
+      "predictor_file": "checkpoints\\predictors_layer32\\bottle_cosine.pt",
+      "predictor_mask_strategy": "inference_aligned",
+      "predictor_sha256": "0409a5aec836fb1ac8601a62010640d80f0b6716efed8731d7d406fb6817c31a",
+      "predictor_status": "complete",
+      "predictor_training_config": {
+        "block_size": 4,
+        "learning_rate": 0.0001,
+        "mask_strategy": "inference_aligned",
+        "seed": 0
+      },
+      "synthetic_ids_sha256": "9eeccf6984f05114e65bde3ca69f94aee791d9f370db499d8eb8deeb09abdda5",
+      "train_ids_sha256": "192883d2b673d219ef8db7b4d10fb1e4ce16e6f0758aeca5b36ff258255f05be",
+      "val_ids_sha256": "c80988126c2a8ad8bce363191229b4896bef0ff7f915fb733f57f5ea65a929b4"
+    },
+    "capsule": {
+      "clean_val_per_fold": [
+        8,
+        7,
+        7
+      ],
+      "files_sha256": {
+        "data\\cache\\latents_layer32\\capsule\\train.pt": "cea8a233d71737bbd61bc28592c1d09964b075c31f86f48175aec78d5125f8a7",
+        "data\\cache\\latents_layer32\\capsule\\val.pt": "d1a7fabcee812ea93fc8a761ae26993e136a03b7cc4e624874f28160d5cefcff",
+        "data\\cache\\layer_features\\layer32\\capsule_synthetic.pt": "93b3a39e903e5a9b02c02c92146097bdcc5d60ed8b09d2cb05758cb4c7db023b",
+        "data\\cache\\layer_features\\layer32\\capsule_val.pt": "77e8a8abd4a0261b6273d9ae26e71890b11f406d14316fe3ae4e8c8c13bffac5"
+      },
+      "latents_layer32_val_equals_layer_features_val_after_fp16": true,
+      "max_abs_one_minus_cos_fp32_vs_fp16_val": 3.5762786865234375e-07,
+      "n_clean_val": 22,
+      "n_synthetic": 88,
+      "n_train_latents": 197,
+      "predictor_best_epoch": 73,
+      "predictor_file": "checkpoints\\predictors_layer32\\capsule_cosine.pt",
+      "predictor_mask_strategy": "inference_aligned",
+      "predictor_sha256": "889b407f5e74400e518d644484d17385c625bf5cdbc90d790ff21ed8b6ca0380",
+      "predictor_status": "complete",
+      "predictor_training_config": {
+        "block_size": 4,
+        "learning_rate": 0.0001,
+        "mask_strategy": "inference_aligned",
+        "seed": 0
+      },
+      "synthetic_ids_sha256": "62afe845131a5d84b14b676fbf6fdf92d25a61028ae3204971cc68b3025818c5",
+      "train_ids_sha256": "01ce16cbdf10be89b9f49a3e9f255cd9760590eda4b9038fec5423ec2369e914",
+      "val_ids_sha256": "ec2a4a21c079483981d0ab77f429971cf9bd5e986be90863248bd09080322795"
+    },
+    "hazelnut": {
+      "clean_val_per_fold": [
+        13,
+        13,
+        13
+      ],
+      "files_sha256": {
+        "data\\cache\\latents_layer32\\hazelnut\\train.pt": "a604b5ca2cb073e12d836d5b00f4027cf4a7341217e08be4e019d29f6712d11f",
+        "data\\cache\\latents_layer32\\hazelnut\\val.pt": "db086ab02baab5cf58a1cfa09dd891f69f6d338ea02425718d402250903429eb",
+        "data\\cache\\layer_features\\layer32\\hazelnut_synthetic.pt": "b1f5be2878dc9d59d74969ae4c654dab5c51a871d727e38b2279c9aca43a4a1f",
+        "data\\cache\\layer_features\\layer32\\hazelnut_val.pt": "b7daeafb34ebe29ab0e96324a6675c4a434f1b2b3f7086cdb04fa6bb5c7b4ef7"
+      },
+      "latents_layer32_val_equals_layer_features_val_after_fp16": true,
+      "max_abs_one_minus_cos_fp32_vs_fp16_val": 3.5762786865234375e-07,
+      "n_clean_val": 39,
+      "n_synthetic": 156,
+      "n_train_latents": 352,
+      "predictor_best_epoch": 100,
+      "predictor_file": "checkpoints\\predictors_layer32\\hazelnut_cosine.pt",
+      "predictor_mask_strategy": "inference_aligned",
+      "predictor_sha256": "f2ed84cf6a4e31fafd27c16fd68cf587da5a796942aa221d6f5a8f9615352b7e",
+      "predictor_status": "complete",
+      "predictor_training_config": {
+        "block_size": 4,
+        "learning_rate": 0.0001,
+        "mask_strategy": "inference_aligned",
+        "seed": 0
+      },
+      "synthetic_ids_sha256": "8f30c16ada592ede555d9c2d6086311afd5dfa6173a9e3cff978ca1694a84d50",
+      "train_ids_sha256": "94373e07f7b96d273d0243b4f032f96ff838f6cb2cfe4bd72a12a62a3814335a",
+      "val_ids_sha256": "2ab92cf47452de247293fbd0d1d5d3435f8213c0172de63fc87ba4db562915f3"
+    }
+  },
+  "predictors": "checkpoints/predictors_layer32 (trained by scripts/train_predictor.py CLI defaults, one run per category; identity verified, train/val ids verified)",
+  "requested_data_files": [
+    "checkpoints\\predictors_layer32\\bottle_cosine.pt",
+    "checkpoints\\predictors_layer32\\capsule_cosine.pt",
+    "checkpoints\\predictors_layer32\\hazelnut_cosine.pt",
+    "data\\cache\\latents_layer32\\bottle\\train.pt",
+    "data\\cache\\latents_layer32\\bottle\\val.pt",
+    "data\\cache\\latents_layer32\\capsule\\train.pt",
+    "data\\cache\\latents_layer32\\capsule\\val.pt",
+    "data\\cache\\latents_layer32\\hazelnut\\train.pt",
+    "data\\cache\\latents_layer32\\hazelnut\\val.pt",
+    "data\\cache\\layer_features\\layer32\\bottle_synthetic.pt",
+    "data\\cache\\layer_features\\layer32\\bottle_val.pt",
+    "data\\cache\\layer_features\\layer32\\capsule_synthetic.pt",
+    "data\\cache\\layer_features\\layer32\\capsule_val.pt",
+    "data\\cache\\layer_features\\layer32\\hazelnut_synthetic.pt",
+    "data\\cache\\layer_features\\layer32\\hazelnut_val.pt"
+  ],
+  "synthetic_fingerprint": "46c947cb99e1faf4",
+  "synthetic_tokens": "data/cache/layer_features/layer32/<category>_synthetic.pt (float16; keyed by content hash of each synthetic PNG)",
+  "torch": "2.2.2+cu121"
+}

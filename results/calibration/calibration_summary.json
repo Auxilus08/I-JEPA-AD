@@ -1,0 +1,98 @@
+{
+  "calibrated_tau": {
+    "bottle": {
+      "0.9": 0.09810158610343933,
+      "0.95": 0.12320096790790558,
+      "0.99": 0.1575491726398468,
+      "0.995": 0.18403758108615875
+    },
+    "capsule": {
+      "0.9": 0.2065046146512032,
+      "0.95": 0.2252842530608173,
+      "0.99": 0.26390793919563293,
+      "0.995": 0.28203704953193665
+    },
+    "hazelnut": {
+      "0.9": 0.2785009741783142,
+      "0.95": 0.3074169456958771,
+      "0.99": 0.3499740660190582,
+      "0.995": 0.36764124035835266
+    }
+  },
+  "decision_thresholds": {
+    "bottle/original (default tau, max)": {
+      "threshold": 0.6593644022941589,
+      "val_fpr": 0.047619047619047616
+    },
+    "bottle/primary (q0.99, top-5)": {
+      "threshold": 0.8259580731391907,
+      "val_fpr": 0.047619047619047616
+    },
+    "capsule/original (default tau, max)": {
+      "threshold": 0.8019761443138123,
+      "val_fpr": 0.045454545454545456
+    },
+    "capsule/primary (q0.99, top-5)": {
+      "threshold": 0.8031012415885925,
+      "val_fpr": 0.045454545454545456
+    },
+    "hazelnut/original (default tau, max)": {
+      "threshold": 0.8667531609535217,
+      "val_fpr": 0.02564102564102564
+    },
+    "hazelnut/primary (q0.99, top-5)": {
+      "threshold": 1.085496187210083,
+      "val_fpr": 0.02564102564102564
+    }
+  },
+  "declared_before_test": {
+    "k_values": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "lambdas": [
+      0.0,
+      0.5,
+      1.0,
+      2.0
+    ],
+    "primary_k": 5,
+    "primary_lambda": 1.0,
+    "primary_quantile": 0.99,
+    "target_fpr": 0.05,
+    "token_quantiles": [
+      0.9,
+      0.95,
+      0.99,
+      0.995
+    ]
+  },
+  "encoder_sha256": "a373c7b16165092e29bd5714c6ce79c574c4a52b01b64bf4c82dc81e6a82cf0b",
+  "masking_settings_yaml": {
+    "coarse_size": 4,
+    "fine_size": 1,
+    "lam": 1.0,
+    "threshold": 0.5
+  },
+  "predictor_provenance_status": {
+    "bottle": "complete",
+    "capsule": "complete",
+    "hazelnut": "complete"
+  },
+  "predictor_set": "baseline",
+  "tau_and_gate_chosen_from": "nominal validation images only",
+  "test_images": {
+    "bottle": 83,
+    "capsule": 132,
+    "hazelnut": 110
+  },
+  "test_used_for_selection": false,
+  "validation_images": {
+    "bottle": 21,
+    "capsule": 22,
+    "hazelnut": 39
+  }
+}

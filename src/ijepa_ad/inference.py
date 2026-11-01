@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 import torch
-import torch.nn.functional as F
 from torch import Tensor
 
 from ijepa_ad.masking.coarse_masker import CoarseMasker, MaskWindow, PatchGrid
@@ -18,6 +19,7 @@ from ijepa_ad.predictor.transformer_predictor import (
     LatentTransformerPredictor,
     PredictorConfig,
 )
+from ijepa_ad.scoring import TokenDiscrepancy, cosine_discrepancy
 
 InferenceMode = Literal["adaptive", "dense", "fixed"]
 
@@ -185,7 +187,15 @@ class InferenceResult:
         theoretical maximum maps to 1. The divisor depends on the mode and lambda,
         so values are comparable only within one (mode, lambda) configuration; use
         ``raw_image_score`` across configurations.
+
+        Undefined (``ValueError``) when the scorer used a custom ``discrepancy``,
+        whose range is unknown; use ``raw_image_score`` there.
         """
+        if not math.isfinite(self.score_upper_bound):
+            raise ValueError(
+                "image_score needs a bounded score; use raw_image_score for a "
+                "scorer built with a custom discrepancy"
+            )
         if self.score_upper_bound <= 0:
             return 0.0  # e.g. dense mode with lambda == 0 scores nothing
         scaled = self.raw_image_score / self.score_upper_bound
@@ -204,7 +214,16 @@ class MaskedLatentScorer:
         threshold: float = 0.5,
         lam: float = 1.0,
         mask_batch_size: int = 16,
+        discrepancy: TokenDiscrepancy | None = None,
     ) -> None:
+        """Build a scorer.
+
+        ``discrepancy`` is opt-in. ``None`` keeps the original ``1 - cos`` token
+        score (and the exact original results). A custom discrepancy replaces the
+        per-token score only: masks, windows and the fine-pass gate are unchanged,
+        and the gate is still evaluated on ``1 - cos`` region scores so ``threshold``
+        keeps its meaning and every variant evaluates the same windows.
+        """
         if not torch.isfinite(torch.tensor(threshold)) or threshold < 0:
             raise ValueError("threshold must be a finite non-negative value")
         if lam < 0:
@@ -218,6 +237,7 @@ class MaskedLatentScorer:
         self.threshold = threshold
         self.lam = lam
         self.mask_batch_size = mask_batch_size
+        self.discrepancy = discrepancy
 
     def score(
         self, latents: Tensor, *, mode: InferenceMode = "adaptive"
@@ -253,7 +273,9 @@ class MaskedLatentScorer:
                 total=len(self.fine.candidates()),
             )
 
-        coarse_scores = self._score_windows(latents, coarse_windows)
+        coarse_scores, gate_scores = self._score_windows_with_gate(
+            latents, coarse_windows
+        )
         if mode == "fixed":
             return self._result(
                 coarse_scores,
@@ -266,7 +288,7 @@ class MaskedLatentScorer:
         region_scores = zero_scores.clone()
         for window in coarse_windows:
             indices = list(window.token_indices)
-            region_scores[indices] = coarse_scores[indices].mean()
+            region_scores[indices] = gate_scores[indices].mean()
         selection = self.fine.select(
             region_scores.reshape(self.grid.size, self.grid.size).detach().cpu(),
             self.threshold,
@@ -283,29 +305,64 @@ class MaskedLatentScorer:
     def _score_windows(
         self, latents: Tensor, windows: tuple[MaskWindow, ...]
     ) -> Tensor:
-        scores = latents.new_zeros(self.grid.tokens)
-        if not windows:
-            return scores
+        return self._score_windows_with_gate(latents, windows)[0]
 
+    def _score_windows_with_gate(
+        self, latents: Tensor, windows: tuple[MaskWindow, ...]
+    ) -> tuple[Tensor, Tensor]:
+        """Return ``(token scores, cosine gate scores)`` for ``windows``.
+
+        Without a custom discrepancy both are the same tensor.
+        """
+        scores = latents.new_zeros(self.grid.tokens)
+        gate_scores = scores if self.discrepancy is None else scores.clone()
+        for batch_windows, predicted, actual in self._predict_windows(latents, windows):
+            with torch.inference_mode():
+                cosine = cosine_discrepancy(predicted, actual)
+                custom = (
+                    cosine
+                    if self.discrepancy is None
+                    else self.discrepancy(predicted, actual)
+                )
+            for row, window in enumerate(batch_windows):
+                indices = list(window.token_indices)
+                scores[indices] = custom[row, indices]
+                gate_scores[indices] = cosine[row, indices]
+        return scores, gate_scores
+
+    def window_predictions(
+        self, latents: Tensor, windows: tuple[MaskWindow, ...]
+    ) -> Tensor:
+        """Predicted token ``[tokens, D]`` made while its own window was masked.
+
+        Tokens outside every window are zero. Used to fit residual statistics.
+        """
+        latents = latents.to(dtype=next(self.predictor.parameters()).dtype)
+        out = latents.new_zeros(self.grid.tokens, latents.shape[-1])
+        for batch_windows, predicted, _ in self._predict_windows(latents, windows):
+            for row, window in enumerate(batch_windows):
+                indices = list(window.token_indices)
+                out[indices] = predicted[row, indices]
+        return out
+
+    def _predict_windows(
+        self, latents: Tensor, windows: tuple[MaskWindow, ...]
+    ) -> Iterator[tuple[tuple[MaskWindow, ...], Tensor, Tensor]]:
+        """Yield ``(windows, predicted, actual)`` batches, tensors ``[B, T, D]``."""
+        if not windows:
+            return
         masks = torch.zeros(
             (len(windows), self.grid.tokens), dtype=torch.bool, device=latents.device
         )
         for row, window in enumerate(windows):
             masks[row, list(window.token_indices)] = True
 
-        with torch.inference_mode():
-            for start in range(0, len(windows), self.mask_batch_size):
-                stop = min(start + self.mask_batch_size, len(windows))
-                batch_masks = masks[start:stop]
-                batch_latents = latents.expand(stop - start, -1, -1)
-                predicted = self.predictor(batch_latents, batch_masks)
-                discrepancies = (
-                    1 - F.cosine_similarity(predicted, batch_latents, dim=-1, eps=1e-8)
-                ).clamp_(0, 2)
-                for row, window in enumerate(windows[start:stop]):
-                    indices = list(window.token_indices)
-                    scores[indices] = discrepancies[row, indices]
-        return scores
+        for start in range(0, len(windows), self.mask_batch_size):
+            stop = min(start + self.mask_batch_size, len(windows))
+            batch_latents = latents.expand(stop - start, -1, -1)
+            with torch.inference_mode():
+                predicted = self.predictor(batch_latents, masks[start:stop])
+            yield windows[start:stop], predicted, batch_latents
 
     def _result(
         self,
@@ -324,5 +381,9 @@ class MaskedLatentScorer:
             heatmap=patch_scores_to_heatmap(patch_scores, self.grid),
             evaluated_regions=evaluated,
             total_regions=total,
-            score_upper_bound=image_score_upper_bound(mode, self.lam),
+            score_upper_bound=(
+                image_score_upper_bound(mode, self.lam)
+                if self.discrepancy is None
+                else math.inf
+            ),
         )

@@ -1,0 +1,48 @@
+{
+ "gpu": "NVIDIA GeForce RTX 4060",
+ "torch": "2.2.2+cu121",
+ "encoder_load_s": 15.097212200023932,
+ "encoder_weights_vram_mb": 3939.07470703125,
+ "encoder_dtype": "torch.float32",
+ "encoder_params_m": 1011.368576,
+ "encoder_b1_ms": {
+  "mean": 87.52789000088039,
+  "std": 5.443394247875645,
+  "p95": 100.50464999658288,
+  "n": 30,
+  "warmup": 5
+ },
+ "encoder_b1_peak_vram_mb": 3965.11865234375,
+ "e2e_fixed": {
+  "mean_ms": 124.8740250019182,
+  "std_ms": 3.499534687802496,
+  "p95_ms": 130.23724500380922,
+  "n_images": 40,
+  "peak_vram_mb": 4078.076171875
+ },
+ "e2e_adaptive": {
+  "mean_ms": 133.75591250078287,
+  "std_ms": 4.442675107344777,
+  "p95_ms": 141.26897999376524,
+  "n_images": 40,
+  "peak_vram_mb": 4078.076171875
+ },
+ "e2e_dense": {
+  "mean_ms": 349.75255750032375,
+  "std_ms": 10.14981208244753,
+  "p95_ms": 367.89365502045257,
+  "n_images": 40,
+  "peak_vram_mb": 4078.1220703125
+ },
+ "patchcore_cache_files": [
+  "train.pt"
+ ],
+ "patchcore_bank_patches": 36848,
+ "patchcore_bank_mb": 197.9140625,
+ "patchcore_score_ms": {
+  "mean": 7.985403336351737,
+  "std": 0.22790733324833704,
+  "p95": 8.579439991444815
+ },
+ "patchcore_peak_vram_mb_incl_bank": 4633.1435546875
+}
